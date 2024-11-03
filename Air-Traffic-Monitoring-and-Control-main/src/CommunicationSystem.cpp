@@ -18,7 +18,6 @@ void* CommunicationSystem::relayNewSpeed(Aircraft &aircraft, int newSpeedX, int 
     string attachPoint = string(ATTACH_POINT) + "_" + to_string(aircraft.getFlightId());
 
     int attempts = 0;
-    // Usually works on the 2nd attempt if not the 1st
     while (attempts < 3) {
         // Attempt to open the communication channel
         int id = name_open(attachPoint.c_str(), 0);
@@ -41,7 +40,6 @@ void* CommunicationSystem::relayNewSpeed(Aircraft &aircraft, int newSpeedX, int 
             name_close(id);
             return EXIT_SUCCESS;
         } else {
-            // Try again
             attempts++;
         }
     }

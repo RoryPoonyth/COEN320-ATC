@@ -27,148 +27,16 @@ void* DataDisplay::MapInitializer(void* args) {
 /**
  * Function used to display the Map of Aircrafts
  */
+
 void* DataDisplay::listenForAircraftMap() {
-    string airspace[rows][columns];
-    initMap(airspace);
-
-    string attachPoint = string(ATTACH_POINT) + "_MAP";
-
-    name_attach_t* attach;
-
-    if ((attach = name_attach(NULL, attachPoint.c_str(), 0)) == NULL) {
-        perror("DataDisplay (listenForAircraftMap): Error occurred while creating the attach point");
-    }
-
-    vector<AircraftData> aircrafts;
-    AircraftData aircraftCommand;
-    aircrafts.push_back(aircraftCommand);
-    aircrafts[0].header.type = 0x05;
-    aircrafts[0].header.subtype = 0x05;
-
-    while (true) {
-        int rcvid = MsgReceive(attach->chid, &aircrafts, sizeof(aircrafts), NULL);
-
-        if (rcvid == -1) { // Error condition, exit
-            break;
-        }
-
-        if (rcvid == 0) { /* Pulse received */
-            switch (aircraftCommand.header.code) {
-                case _PULSE_CODE_DISCONNECT:
-                    ConnectDetach(aircraftCommand.header.scoid);
-                    continue;
-                case _PULSE_CODE_UNBLOCK:
-                    break;
-                default:
-                    break;
-            }
-            continue;
-        }
-
-        if (aircraftCommand.header.type == _IO_CONNECT) {
-            MsgReply(rcvid, EOK, NULL, 0);
-            continue;
-        }
-
-        if (aircraftCommand.header.type > _IO_BASE && aircraftCommand.header.type <= _IO_MAX) {
-            MsgError(rcvid, ENOSYS);
-            continue;
-        }
-
-        if (aircrafts[0].header.type == 0x05 && aircrafts[0].header.subtype == 0x05) {
-            vector<Aircraft*> receivedAircrafts;
-
-            for (AircraftData aircraftCommand : aircrafts) {
-                Aircraft* aircraft = new Aircraft();
-                aircraft->setFlightId(aircraftCommand.flightId);
-                aircraft->setPositionX(aircraftCommand.positionX);
-                aircraft->setPositionY(aircraftCommand.positionY);
-                aircraft->setPositionZ(aircraftCommand.positionZ);
-                aircraft->setSpeedX(aircraftCommand.speedX);
-                aircraft->setSpeedY(aircraftCommand.speedY);
-                aircraft->setSpeedZ(aircraftCommand.speedZ);
-
-                receivedAircrafts.push_back(aircraft);
-            }
-
-            updateMap(receivedAircrafts, airspace);
-
-            MsgReply(rcvid, EOK, NULL, 0);
-            receivedAircrafts.clear();
-            continue;
-        } else {
-            MsgError(rcvid, ENOSYS);
-            continue;
-        }
-    }
-
-    return EXIT_SUCCESS;
+   //TODO
 }
 
 /**
  * Function used to listen to display a specific aircraft's info (requested by Operator)
  */
 void* DataDisplay::listen() {
-    string attachPoint = string(ATTACH_POINT) + "_datadisplay_";
-
-    name_attach_t* attach;
-
-    if ((attach = name_attach(NULL, attachPoint.c_str(), 0)) == NULL) {
-        perror("DataDisplay (listen): Error occurred while creating the attach point");
-    }
-
-    AircraftData aircraftCommand;
-
-    while (true) {
-        int rcvid = MsgReceive(attach->chid, &aircraftCommand, sizeof(aircraftCommand), NULL);
-
-        if (rcvid == -1) { // Error condition, exit
-            break;
-        }
-
-        if (rcvid == 0) { /* Pulse received */
-            switch (aircraftCommand.header.code) {
-                case _PULSE_CODE_DISCONNECT:
-                    ConnectDetach(aircraftCommand.header.scoid);
-                    continue;
-                case _PULSE_CODE_UNBLOCK:
-                    break;
-                default:
-                    break;
-            }
-            continue;
-        }
-
-        if (aircraftCommand.header.type == _IO_CONNECT) {
-            MsgReply(rcvid, EOK, NULL, 0);
-            continue;
-        }
-
-        if (aircraftCommand.header.type > _IO_BASE && aircraftCommand.header.type <= _IO_MAX) {
-            MsgError(rcvid, ENOSYS);
-            continue;
-        }
-
-        if (aircraftCommand.header.type == 0x05 && aircraftCommand.header.subtype == 0x01) {
-            cout << endl << endl << "-----------------------------------------------------------------------------" << endl << endl
-                 << "(Operator Request) Received aircraft data: flightId = " << aircraftCommand.flightId
-                 << ", PositionX = " << aircraftCommand.positionX
-                 << ", PositionY = " << aircraftCommand.positionY
-                 << ", PositionZ = " << aircraftCommand.positionZ
-                 << ", SpeedX = " << aircraftCommand.speedX
-                 << ", SpeedY = " << aircraftCommand.speedY
-                 << ", SpeedZ = " << aircraftCommand.speedZ
-                 << endl << "-----------------------------------------------------------------------------" << endl << endl;
-
-            MsgReply(rcvid, EOK, NULL, 0);
-            continue;
-        } else {
-            MsgError(rcvid, ENOSYS);
-            continue;
-        }
-    }
-
-    return EXIT_SUCCESS;
+   //TODO
 }
 
 /**

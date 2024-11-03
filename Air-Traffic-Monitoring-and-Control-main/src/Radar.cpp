@@ -40,7 +40,7 @@ void* Radar::pingAircraft() {
     while (true) {
         int rcvid = MsgReceive(attach->chid, &aircraftCommand, sizeof(aircraftCommand), NULL);
 
-        if (rcvid == -1) { // Error condition, exit
+        if (rcvid == -1) {
             break;
         }
 

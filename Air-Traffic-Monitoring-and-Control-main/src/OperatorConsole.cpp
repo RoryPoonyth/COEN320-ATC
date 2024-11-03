@@ -48,6 +48,7 @@ void* OperatorConsole::displayAircraftDataThread(void* args) {
 /**
  * Listen For User Input
  */
+
 void OperatorConsole::listenForUserInput() {
     while (true) {
         int commandType;

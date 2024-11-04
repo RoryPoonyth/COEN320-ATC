@@ -1,31 +1,23 @@
-#ifndef SRC_OPERATORCONSOLE_H_
-#define SRC_OPERATORCONSOLE_H_
+#pragma once
 
 #include <string>
-#include <vector>
 #include <iostream>
 #include <sys/dispatch.h>
 
-using namespace std;
-
 class OperatorConsole {
 private:
-    string log_entry = "";
+    std::string log_entry;
 
 public:
     OperatorConsole();
 
-    static void* listenForOperatorInput(void* args);
-    static void* displayAircraftDataThread(void* args);
-    static void* updateAircraftSpeedThread(void* args);
-
+    // Thread functions
     void listenForUserInput();
-    void* updateAircraftSpeed();
-    void* displayAircraftData();
+    void updateAircraftSpeed();
+    void displayAircraftData();
 
-    void writeLog(string log_entry);
+    // Log function
+    void writeLog(const std::string& log_entry);
 
-    virtual ~OperatorConsole();
+    ~OperatorConsole();
 };
-
-#endif /* SRC_OPERATORCONSOLE_H_ */

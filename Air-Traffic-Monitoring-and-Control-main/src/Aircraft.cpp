@@ -1,223 +1,154 @@
 #include "Aircraft.h"
-#include <pthread.h>
-#include <iostream>
-#include <unistd.h>
-#include <sys/dispatch.h>
-#include <vector>
-#include <string>
 #include "cTimer.h"
+#include <iostream>
+#include <string>
+#include <vector>
+#include <thread>
+#include <chrono>
+#include <sys/dispatch.h>
 
 using namespace std;
 
-#define ATTACH_POINT "default"
+constexpr char ATTACH_POINT[] = "default";
 
-Aircraft::Aircraft() {
-    // Default constructor
-    this->thread = 0;
+Aircraft::Aircraft()
+    : flightId(0), positionX(0), positionY(0), positionZ(0), speedX(0), speedY(0), speedZ(0), time(0) {}
+
+Aircraft::Aircraft(int flightId, int positionX, int positionY, int positionZ, int speedX, int speedY, int speedZ, int time)
+    : flightId(flightId), positionX(positionX), positionY(positionY), positionZ(positionZ),
+      speedX(speedX), speedY(speedY), speedZ(speedZ), time(time) {
+    initializeAttributes();
 }
 
-Aircraft::Aircraft(int flightId, int positionX, int positionY, int positionZ, int speedX, int speedY, int speedZ, int time) {
-    this->thread = 0;
-
-    this->flightId = flightId;
-    this->positionX = positionX;
-    this->positionY = positionY;
-    this->positionZ = positionZ;
-    this->speedX = speedX;
-    this->speedY = speedY;
-    this->speedZ = speedZ;
-    this->time = time;
-
-    err_no = pthread_attr_init(&attr);
+void Aircraft::initializeAttributes() {
+    int err_no = pthread_attr_init(&attr);
     if (err_no != 0) {
-        printf("ERROR from pthread_attr_init() is %d \n", err_no);
+        cerr << "ERROR initializing thread attributes: " << err_no << endl;
     }
     err_no = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
     if (err_no != 0) {
-        printf("ERROR from pthread_attr_setdetachstate() is %d \n", err_no);
+        cerr << "ERROR setting detach state for thread attributes: " << err_no << endl;
     }
     err_no = pthread_attr_setstacksize(&attr, 256);
     if (err_no != 0) {
-        printf("ERROR from pthread_attr_setstacksize() is %d \n", err_no);
+        cerr << "ERROR setting stack size for thread attributes: " << err_no << endl;
     }
 }
 
-// AircraftListenHelper function, used to unpack arguments and call listen with attachPoint
-void* Aircraft::aircraftListenHelper(void* args) {
-    AircraftListenArgs* arguments = (AircraftListenArgs*)args;
-    return arguments->aircraft->listen(arguments->attachPoint);
+Aircraft::~Aircraft() {
+    if (thread.joinable()) {
+        thread.join();
+    }
 }
 
-Aircraft::~Aircraft() {}
+int Aircraft::getFlightId() const { return flightId; }
+int Aircraft::getPositionX() const { return positionX; }
+int Aircraft::getPositionY() const { return positionY; }
+int Aircraft::getPositionZ() const { return positionZ; }
+int Aircraft::getPrevPositionX() const { return positionX - speedX; }
+int Aircraft::getPrevPositionY() const { return positionY - speedY; }
+int Aircraft::getPrevPositionZ() const { return positionZ - speedZ; }
+int Aircraft::getSpeedX() const { return speedX; }
+int Aircraft::getSpeedY() const { return speedY; }
+int Aircraft::getSpeedZ() const { return speedZ; }
 
-int Aircraft::getFlightId() {
-    return flightId;
-}
-
-int Aircraft::getPositionX() {
-    return positionX;
-}
-
-int Aircraft::getPositionY() {
-    return positionY;
-}
-
-int Aircraft::getPositionZ() {
-    return positionZ;
-}
-
-int Aircraft::getPrevPositionX() {
-    return positionX - speedX;
-}
-
-int Aircraft::getPrevPositionY() {
-    return positionY - speedY;
-}
-
-int Aircraft::getPrevPositionZ() {
-    return positionZ - speedZ;
-}
-
-int Aircraft::getSpeedX() {
-    return speedX;
-}
-
-int Aircraft::getSpeedY() {
-    return speedY;
-}
-
-int Aircraft::getSpeedZ() {
-    return speedZ;
-}
-
-void Aircraft::setFlightId(int flightId) {
-    this->flightId = flightId;
-}
-
-void Aircraft::setPositionX(int positionX) {
-    this->positionX = positionX;
-}
-
-void Aircraft::setPositionY(int positionY) {
-    this->positionY = positionY;
-}
-
-void Aircraft::setPositionZ(int positionZ) {
-    this->positionZ = positionZ;
-}
-
-void Aircraft::setSpeedX(int speedX) {
-    this->speedX = speedX;
-}
-
-void Aircraft::setSpeedY(int speedY) {
-    this->speedY = speedY;
-}
-
-void Aircraft::setSpeedZ(int speedZ) {
-    this->speedZ = speedZ;
-}
+void Aircraft::setFlightId(int id) { flightId = id; }
+void Aircraft::setPositionX(int x) { positionX = x; }
+void Aircraft::setPositionY(int y) { positionY = y; }
+void Aircraft::setPositionZ(int z) { positionZ = z; }
+void Aircraft::setSpeedX(int sx) { speedX = sx; }
+void Aircraft::setSpeedY(int sy) { speedY = sy; }
+void Aircraft::setSpeedZ(int sz) { speedZ = sz; }
 
 void Aircraft::startThread() {
-    err_no = pthread_create(&thread, &attr, &Aircraft::planeOperations, this);
-    if (err_no != 0) {
-        printf("ERROR when creating thread number: %d \n", err_no);
-    }
-
-    if (err_no != 0) {
-        printf("ERROR when joining thread number: %d \n", err_no);
+    thread = std::thread(&Aircraft::planeOperations, this);
+    if (!thread.joinable()) {
+        cerr << "ERROR starting aircraft thread." << endl;
     }
 }
 
 void Aircraft::stopThread() {
-    err_no = pthread_cancel(thread);
-    if (err_no != 0) {
-        printf("ERROR when cancelling thread number: %d \n", err_no);
+    if (thread.joinable()) {
+        thread.detach();
     }
 }
 
-void* Aircraft::planeOperations(void* arg) {
-    Aircraft* a = ((Aircraft*)arg);
-    cTimer timer(1, 0); // 1 second, 0 milliseconds interval
-
+void Aircraft::planeOperations() {
+    cTimer timer(1, 0);  // 1-second interval
     while (true) {
-        a->setPositionX(a->getPositionX() + a->getSpeedX());
-        a->setPositionY(a->getPositionY() + a->getSpeedY());
-        a->setPositionZ(a->getPositionZ() + a->getSpeedZ());
+        positionX += speedX;
+        positionY += speedY;
+        positionZ += speedZ;
         timer.waitTimer();
     }
-
-    return NULL;
 }
 
-void* Aircraft::listen(string attachPoint) {
-    name_attach_t* attach;
-
-    if ((attach = name_attach(NULL, attachPoint.c_str(), 0)) == NULL) {
-        cout << "Aircraft (listen): Error occurred while creating the attach point." << endl;
+void* Aircraft::listen(const string& attachPoint) {
+    auto* attach = name_attach(NULL, attachPoint.c_str(), 0);
+    if (!attach) {
+        cerr << "Aircraft (listen): Error occurred while creating the attach point." << endl;
+        return nullptr;
     }
 
     AircraftData aircraftCommand;
-
-    // Listen infinitely for commands received
     while (true) {
         int rcvid = MsgReceive(attach->chid, &aircraftCommand, sizeof(aircraftCommand), NULL);
-
-        if (rcvid == -1) { // Error condition, exit
-            break;
+        if (rcvid == -1) {
+            break;  // Error condition, exit loop
         }
 
-        if (rcvid == 0) { // Pulse received
-            switch (aircraftCommand.header.code) {
-            case _PULSE_CODE_DISCONNECT:
-                ConnectDetach(aircraftCommand.header.scoid);
-                continue;
-            case _PULSE_CODE_UNBLOCK:
-                break;
-            default:
-                break;
-            }
+        if (rcvid == 0) {
+            handlePulse(aircraftCommand);
             continue;
         }
 
-        if (aircraftCommand.header.type == _IO_CONNECT) {
-            MsgReply(rcvid, EOK, NULL, 0);
-            continue;
-        }
-
-        if (aircraftCommand.header.type > _IO_BASE && aircraftCommand.header.type <= _IO_MAX) {
-            MsgError(rcvid, ENOSYS);
-            continue;
-        }
-
-        if (aircraftCommand.header.type == 0x00) {
-            if (aircraftCommand.header.subtype == 0x01) {
-                // Send aircraft position and velocity
-                aircraftCommand.flightId = flightId;
-                aircraftCommand.positionX = positionX;
-                aircraftCommand.positionY = positionY;
-                aircraftCommand.positionZ = positionZ;
-                aircraftCommand.speedX = speedX;
-                aircraftCommand.speedY = speedY;
-                aircraftCommand.speedZ = speedZ;
-                MsgReply(rcvid, EOK, &aircraftCommand, sizeof(aircraftCommand));
-                break;
-            } else if (aircraftCommand.header.subtype == 0x02) {
-                // Update current aircraft speed
-                speedX = aircraftCommand.speedX;
-                speedY = aircraftCommand.speedY;
-                speedZ = aircraftCommand.speedZ;
-                MsgReply(rcvid, EOK, NULL, 0);
-                break;
-            } else {
-                MsgError(rcvid, ENOSYS);
-                continue;
-            }
-        }
+        processCommand(rcvid, aircraftCommand);
     }
 
-    // Remove the name from the space
     name_detach(attach, 0);
+    return nullptr;
+}
 
-    return NULL;
+void Aircraft::handlePulse(const AircraftData& aircraftCommand) {
+    switch (aircraftCommand.header.code) {
+        case _PULSE_CODE_DISCONNECT:
+            ConnectDetach(aircraftCommand.header.scoid);
+            break;
+        default:
+            break;
+    }
+}
+
+void Aircraft::processCommand(int rcvid, AircraftData& aircraftCommand) {
+    if (aircraftCommand.header.type == 0x00) {
+        if (aircraftCommand.header.subtype == 0x01) {
+            updateAircraftData(aircraftCommand);
+            MsgReply(rcvid, EOK, &aircraftCommand, sizeof(aircraftCommand));
+        } else if (aircraftCommand.header.subtype == 0x02) {
+            updateSpeed(aircraftCommand);
+            MsgReply(rcvid, EOK, NULL, 0);
+        } else {
+            MsgError(rcvid, ENOSYS);
+        }
+    } else if (aircraftCommand.header.type > _IO_BASE && aircraftCommand.header.type <= _IO_MAX) {
+        MsgError(rcvid, ENOSYS);
+    } else {
+        MsgReply(rcvid, EOK, NULL, 0);
+    }
+}
+
+void Aircraft::updateAircraftData(AircraftData& data) const {
+    data.flightId = flightId;
+    data.positionX = positionX;
+    data.positionY = positionY;
+    data.positionZ = positionZ;
+    data.speedX = speedX;
+    data.speedY = speedY;
+    data.speedZ = speedZ;
+}
+
+void Aircraft::updateSpeed(const AircraftData& data) {
+    speedX = data.speedX;
+    speedY = data.speedY;
+    speedZ = data.speedZ;
 }

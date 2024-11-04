@@ -1,51 +1,58 @@
 #include "CommunicationSystem.h"
 #include "Aircraft.h"
 
+#include <iostream>
 #include <string>
 #include <sys/dispatch.h>
+#include <cerrno> // for errno
+#include <cstring> // for strerror
 
-using namespace std;
-
-#define ATTACH_POINT "default"
+constexpr char BASE_ATTACH_POINT[] = "default";
 
 CommunicationSystem::CommunicationSystem() {}
 
 /**
- * Relay new speed to the aircraft specified by Operator Request
+ * Relay new speed to the specified aircraft.
+ * @param aircraft The Aircraft to which speed update is to be relayed.
+ * @param newSpeedX New X speed for the aircraft.
+ * @param newSpeedY New Y speed for the aircraft.
+ * @param newSpeedZ New Z speed for the aircraft.
+ * @return true if the message was sent successfully, false otherwise.
  */
-void* CommunicationSystem::relayNewSpeed(Aircraft &aircraft, int newSpeedX, int newSpeedY, int newSpeedZ) {
-    // Generate the unique attach point name based on flightId
-    string attachPoint = string(ATTACH_POINT) + "_" + to_string(aircraft.getFlightId());
+bool CommunicationSystem::relayNewSpeed(Aircraft& aircraft, int newSpeedX, int newSpeedY, int newSpeedZ) {
+    std::string attachPoint = std::string(BASE_ATTACH_POINT) + "_" + std::to_string(aircraft.getFlightId());
 
     int attempts = 0;
-    while (attempts < 3) {
+    constexpr int max_attempts = 3;
+    while (attempts < max_attempts) {
         // Attempt to open the communication channel
         int id = name_open(attachPoint.c_str(), 0);
         if (id != -1) {
-            // Set header type and subtype to request speed update
-            AircraftData aircraftCommand;
+            // Prepare the command to update aircraft speed
+            AircraftData aircraftCommand{};
             aircraftCommand.header.type = 0x00;
             aircraftCommand.header.subtype = 0x02;
             aircraftCommand.speedX = newSpeedX;
             aircraftCommand.speedY = newSpeedY;
             aircraftCommand.speedZ = newSpeedZ;
 
-            // Send new speed expecting no response
-            if (MsgSend(id, &aircraftCommand, sizeof(aircraftCommand), NULL, 0) == -1) {
-                cout << "Error while sending new speed data: " << strerror(errno) << endl;
+            // Send the command
+            if (MsgSend(id, &aircraftCommand, sizeof(aircraftCommand), nullptr, 0) == -1) {
+                std::cerr << "Error sending new speed data: " << strerror(errno) << std::endl;
                 name_close(id);
-                return (void*)EXIT_FAILURE;
+                return false;
             }
 
             name_close(id);
-            return EXIT_SUCCESS;
+            return true;
         } else {
-            attempts++;
+            ++attempts;
+            std::cerr << "Attempt " << attempts << " to open channel failed." << std::endl;
         }
     }
 
-    cout << "ERROR: Failed to attach the channel." << endl;
-    return (void*)EXIT_FAILURE;
+    std::cerr << "ERROR: Failed to open communication channel after " << max_attempts << " attempts." << std::endl;
+    return false;
 }
 
 CommunicationSystem::~CommunicationSystem() {}

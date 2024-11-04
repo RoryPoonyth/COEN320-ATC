@@ -1,18 +1,14 @@
-#ifndef SRC_COMMUNICATIONSYSTEM_H_
-#define SRC_COMMUNICATIONSYSTEM_H_
+#pragma once
 
 #include "Aircraft.h"
-
-using namespace std;
+#include <string>
 
 class CommunicationSystem {
 public:
     CommunicationSystem();
-
-    void* relayNewSpeed(Aircraft &aircraft, int newSpeedX, int newSpeedY, int newSpeedZ);
-    void* relayNewPosition(Aircraft &aircraft, int newPositionX, int newPositionY, int newPositionZ);
-
     virtual ~CommunicationSystem();
-};
 
-#endif /* SRC_COMMUNICATIONSYSTEM_H_ */
+    // Functions to relay new data to the specified aircraft
+    bool relayNewSpeed(Aircraft& aircraft, int newSpeedX, int newSpeedY, int newSpeedZ);
+    bool relayNewPosition(Aircraft& aircraft, int newPositionX, int newPositionY, int newPositionZ);
+};

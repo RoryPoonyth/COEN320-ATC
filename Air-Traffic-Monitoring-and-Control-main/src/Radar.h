@@ -1,28 +1,26 @@
-#ifndef SRC_RADAR_H_
-#define SRC_RADAR_H_
+#pragma once
 
 #include "Aircraft.h"
-
 #include <vector>
-
-using namespace std;
 
 class Radar {
 public:
     Radar();
-    Radar(vector<Aircraft>& aircrafts);
-    Radar(Aircraft& aircraft);
+    Radar(const std::vector<Aircraft>& aircrafts);
+    Radar(const Aircraft& aircraft);
 
-    static void* radarInitializer(void* args);
+    // Initializes radar and starts pinging aircraft
+    void radarInitializer();
 
-    void* pingAircraft();
-    AircraftData operatorRequestPingAircraft(int flightId);
+    // Pings aircraft in the system
+    void pingAircraft();
 
-    virtual ~Radar();
+    // Requests a ping for a specific aircraft by flight ID
+    AircraftData requestPingForAircraft(int flightId);
+
+    ~Radar();
 
 private:
     Aircraft aircraft;
-    vector<Aircraft> aircrafts;
+    std::vector<Aircraft> aircrafts;
 };
-
-#endif /* SRC_RADAR_H_ */

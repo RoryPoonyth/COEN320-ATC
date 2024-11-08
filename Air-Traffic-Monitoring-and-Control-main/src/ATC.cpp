@@ -1,4 +1,5 @@
 #include <iostream>
+
 #include "Aircraft.h"
 #include "Radar.h"
 #include "CommunicationSystem.h"
@@ -7,158 +8,156 @@
 #include "OperatorConsole.h"
 #include <vector>
 #include <fstream>
-#include <thread>
-#include <memory>
 
-#define ROWS 25
-#define COLUMNS 25
+#define rows 25 // Defines grid dimensions for display or calculations
+#define columns 25
 
-#define ATTACH_POINT "default"
+#define ATTACH_POINT "default" // Placeholder for attachment point configuration
 
-using namespace std;
 
-void createInput() {
-    fstream file;
-    file.open("low.txt", ios::out);
-    if (file.is_open()) {
-        file << "3, 0, 0, 0, 250, 250, 0, 0\n";
-        file << "4, 5000, 0, 0, 250, 0, 0, 0\n";
-        file << "5, 1800, 0, 0, 251, 0, 0, 0\n";
-        file << "10, 1000, 1000, 0, 200, 150, 0, 0\n";
-        file.close();
-    }
+using namespace std; // Using the standard namespace
 
-    file.open("med.txt", ios::out);
-    if (file.is_open()) {
-        file << "3, 0, 0, 0, 250, 250, 0, 0\n";
-        file << "4, 5000, 0, 0, 250, 0, 0, 0\n";
-        file << "5, 1800, 0, 0, 251, 0, 0, 0\n";
-        file << "6, 0, 700, 0, 300, 0, 0, 0\n";
-        file << "7, 1000, 3000, 0, 500, 0, 0, 0\n";
-        file << "11, 1500, 2000, 0, 250, 100, 0, 0\n";
-        file.close();
-    }
+// Function to create sample input files for different congestion levels
+void createInput(){
+	fstream file;
 
-    file.open("high.txt", ios::out);
-    if (file.is_open()) {
-        file << "3, 0, 0, 0, 250, 250, 0, 0\n";
-        file << "4, 5000, 0, 0, 250, 0, 0, 0\n";
-        file << "5, 1800, 0, 0, 251, 0, 0, 0\n";
-        file << "6, 0, 700, 0, 300, 0, 0, 0\n";
-        file << "7, 1000, 3000, 0, 500, 0, 0, 0\n";
-        file << "8, 4000, 700, 0, 300, 0, 0, 0\n";
-        file << "9, 1000, 200, 0, 500, 0, 0, 0\n";
-        file << "12, 2000, 1500, 0, 400, 200, 0, 0\n";
-        file << "13, 2500, 2500, 0, 450, 150, 0, 0\n";
-        file.close();
-    }
+	// Creates "low.txt" for low congestion data
+	file.open("low.txt", ios::out); // File saved in /data/var/tmp in virtual machine
+	if(file.is_open()){
+		// Format: flightId, positionX, positionY, positionZ, speedX, speedY, speedZ, time
+		file << "1, 0, 0, 0, 250, 250, 0, 0 \n";
+		file << "2, 5000, 0, 0, 250, 0, 0, 0 \n";
+		file << "3, 1800, 0, 0, 251, 0, 0, 0 \n";
+		// Add more aircraft data if needed
+		file.close();
+	}
+
+	// Creates "med.txt" for medium congestion data
+	file.open("med.txt", ios::out);
+	if(file.is_open()){
+		file << "1, 0, 0, 0, 250, 250, 0, 0 \n";
+		file << "2, 5000, 0, 0, 250, 0, 0, 0 \n";
+		file << "3, 1800, 0, 0, 251, 0, 0, 0 \n";
+		file << "4, 0, 700, 0, 300, 0, 0, 0 \n";
+		file << "5, 1000, 3000, 0, 500, 0, 0, 0 \n";
+		// Add more aircraft data if needed
+		file.close();
+	}
+
+	// Creates "high.txt" for high congestion data
+	file.open("high.txt", ios::out);
+	if(file.is_open()){
+		file << "1, 0, 0, 0, 250, 250, 0, 0 \n";
+		file << "2, 5000, 0, 0, 250, 0, 0, 0 \n";
+		file << "3, 1800, 0, 0, 251, 0, 0, 0 \n";
+		file << "4, 0, 700, 0, 300, 0, 0, 0 \n";
+		file << "5, 1000, 3000, 0, 500, 0, 0, 0 \n";
+		file << "6, 4000, 700, 0, 300, 0, 0, 0 \n";
+		file << "7, 1000, 200, 0, 500, 0, 0, 0 \n";
+		// Add more aircraft data if needed
+		file.close();
+	}
 }
 
-void printInput(const string& filename) {
-    fstream file;
-    file.open(filename, ios::in);
-    if (file.is_open()) {
-        string line;
-        while (getline(file, line)) {
-            cout << line << endl;
-        }
-        file.close();
-    }
+// Function to print the contents of a specified file
+void printInput(string filename){
+	fstream file;
+	file.open(filename, ios::in); // Opens the file for reading
+	if(file.is_open()){
+		string line;
+		while(getline(file, line)){
+			cout << line << endl; // Outputs each line
+		}
+		file.close();
+	}
 }
 
 int main() {
-    string filename = "";
-    int congestion = 0;
-    cout << "Type 1 for low, 2 for medium, 3 for high congestion: " << endl;
-    cin >> congestion;
-    switch (congestion) {
-        case 1:
-            filename = "low.txt";
-            break;
-        case 2:
-            filename = "med.txt";
-            break;
-        case 3:
-            filename = "high.txt";
-            break;
-        default:
-            cout << "Invalid option" << endl;
-            return 1;
-    }
+	string filename = ""; // Holds the filename based on congestion level
+	int congestion = 0;
 
-    createInput();
-    printInput(filename);
+	cout << "type 1 for low, 2 for med, 3 for high congestion" << endl;
+	cin >> congestion;
 
-    DataDisplay dataDisplay;
-    ComputerSystem computerSystem;
-    OperatorConsole operatorConsole;
-    Radar radar;
-    CommunicationSystem communicationSystem;
+	// Sets the filename based on user input
+	switch(congestion){
+	case 1:
+		filename = "low.txt";
+		break;
+	case 2:
+		filename = "med.txt";
+		break;
+	case 3:
+		filename = "high.txt";
+		break;
+	}
 
-    vector<unique_ptr<Aircraft>> aircrafts;
+	createInput(); // Creates input files
+	printInput(filename); // Verifies content by printing the selected file
 
-    fstream file;
-    file.open(filename, ios::in);
-    if (file.is_open()) {
-        string line;
-        while (getline(file, line)) {
-            string delimiter = ",";
-            size_t pos = 0;
-            string token;
-            vector<int> args;
+	// System components initialization
+	DataDisplay dataDisplay;
+	ComputerSystem computerSystem;
+	OperatorConsole operatorConsole;
+	Radar radar;
+	CommunicationSystem communicationSystem;
 
-            while ((pos = line.find(delimiter)) != string::npos) {
-                token = line.substr(0, pos);
-                args.push_back(stoi(token));
-                line.erase(0, pos + delimiter.length());
-            }
-            args.push_back(stoi(line));
+	vector<Aircraft*> aircrafts; // Vector to hold Aircraft objects
 
-            aircrafts.push_back(std::unique_ptr<Aircraft>(new Aircraft(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7])));
-        }
-        file.close();
-    }
+	// Load aircraft data from file and populate aircrafts vector
+	fstream file;
+	file.open(filename, ios::in);
+	if(file.is_open()){
+		string line;
+		while(getline(file, line)){
+			string delimiter = ",";
+			size_t pos = 0;
+			string token;
+			vector<int> arg; // Holds parsed values for an aircraft
 
-    // Create a vector of raw pointers to pass to ComputerSystem
-    vector<Aircraft*> aircraftPointers;
-    for (auto& aircraft : aircrafts) {
-        aircraftPointers.push_back(aircraft.get());
-    }
+			// Parse each value from line and add to arg vector
+			while ((pos = line.find(delimiter)) < 10000000) {
+			    token = line.substr(0, pos);
+			    arg.push_back((int)atoi(token.c_str()));
+			    line.erase(0, pos + delimiter.length());
+			}
+			arg.push_back((int)atoi(line.c_str())); // Adds last element
 
-    computerSystem.setAircrafts(aircraftPointers);
-    computerSystem.alarm();
+			// Create a new Aircraft object with parsed values and add to vector
+			aircrafts.push_back(new Aircraft(arg[0], arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7]));
+		}
+		file.close();
+	}
 
-    for (auto& aircraft : aircrafts) {
-        aircraft->startThread();
-    }
+	// Assign aircrafts to computer system and initiate alarm
+	computerSystem.setAircrafts(aircrafts);
+	computerSystem.alarm();
 
-    // Create and start threads using std::thread
-    vector<std::thread> threads;
+	// Start each aircraft's thread
+	for(Aircraft* ap : aircrafts){
+		ap->startThread();
+	}
 
-    threads.emplace_back(&Radar::radarInitializer, &radar);
-    threads.emplace_back(&DataDisplay::MapInitializer, &dataDisplay);
-    threads.emplace_back(&ComputerSystem::MapDisplayThread, &computerSystem);
-    threads.emplace_back(&DataDisplay::dataDisplayInitializer, &dataDisplay);
-    threads.emplace_back(&ComputerSystem::computerSystemThread, &computerSystem);
-    threads.emplace_back(&OperatorConsole::listenForOperatorInput, &operatorConsole);
-    threads.emplace_back(&ComputerSystem::separationCheckThread, &computerSystem);
+	// Create and initialize system threads for various components
+	pthread_t mapDisplayThread, userInputThread, computerSystemThread, dataDisplayThread, mapInitializeThread, separationThread, radarThread;
 
-    // Run infinitely, otherwise main will complete its execution before the threads and program will terminate
-    while (true) {
-        this_thread::sleep_for(chrono::seconds(500)); // Reduce resource use
-    }
+	pthread_create(&radarThread, nullptr, &Radar::radarInitializer, &radar);
+	pthread_create(&mapInitializeThread, nullptr, &DataDisplay::MapInitializer, &dataDisplay);
+	pthread_create(&mapDisplayThread, nullptr, &ComputerSystem::MapDisplayThread, &computerSystem);
+	pthread_create(&dataDisplayThread, nullptr, &DataDisplay::dataDisplayInitializer, &dataDisplay);
+	pthread_create(&computerSystemThread, nullptr, &ComputerSystem::computerSystemThread, &computerSystem);
+	pthread_create(&userInputThread, nullptr, &OperatorConsole::listenForOperatorInput, &operatorConsole);
+	pthread_create(&separationThread, nullptr, &ComputerSystem::separationCheckThread, &computerSystem);
 
-    // Stop aircraft threads
-    for (auto& aircraft : aircrafts) {
-        aircraft->stopThread();
-    }
+	// Main loop to keep the program running indefinitely
+	while (true) {
+		sleep(500); // Reduce resource use by adding a delay
+	}
 
-    // Join all threads
-    for (auto& t : threads) {
-        if (t.joinable()) {
-            t.join();
-        }
-    }
+	// Stop each aircraft's thread before exiting
+	for (size_t i = 0; i < aircrafts.size(); ++i) {
+		aircrafts[i]->stopThread();
+	}
 
-    return 0;
+	return 0;
 }

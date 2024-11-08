@@ -27,7 +27,7 @@ private:
     int speedX = 0;
     int speedY = 0;
     int speedZ = 0;
-    int time = 0; // Consider using std::chrono for more flexible time management
+    int time = 0;
 
     std::thread thread;
     std::atomic<bool> isRunning{false};
@@ -36,6 +36,10 @@ public:
     Aircraft();
     Aircraft(int flightId, int positionX, int positionY, int positionZ, int speedX, int speedY, int speedZ, int time);
     virtual ~Aircraft();
+
+    // Delete copy constructor and assignment operator
+    Aircraft(const Aircraft&) = delete;
+    Aircraft& operator=(const Aircraft&) = delete;
 
     int getFlightId() const;
     void setFlightId(int flightId);
@@ -61,6 +65,9 @@ public:
     void stopThread();
     void move();
 
+    // Static function for aircraft listening
+    static void* aircraftListenHelper(void* args);
+
 private:
     void planeOperations();
     void listen(const std::string& attachPoint);
@@ -70,5 +77,3 @@ struct AircraftListenArgs {
     Aircraft* aircraft;
     std::string attachPoint;
 };
-
-#endif /* SRC_AIRCRAFT_H_ */

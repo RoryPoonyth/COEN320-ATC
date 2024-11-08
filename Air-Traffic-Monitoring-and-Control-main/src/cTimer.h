@@ -1,19 +1,13 @@
 #ifndef CTIMER_H_
 #define CTIMER_H_
 
-#include <stdio.h>
 #include <iostream>
-#include <time.h>
-#include <errno.h>
-#include <unistd.h>
-#include <pthread.h>
-#include <sync.h>
+#include <ctime>
+#include <cerrno>
+#include <cstdint>
 #include <sys/siginfo.h>
 #include <sys/neutrino.h>
-#include <sys/netmgr.h>
 #include <sys/syspage.h>
-#include <inttypes.h>
-#include <stdint.h>
 
 class cTimer {
 private:
@@ -30,15 +24,26 @@ private:
     uint64_t tick_cycles, tock_cycles;
 
 public:
+    // Constructor to initialize timer with given seconds and milliseconds
     cTimer(uint32_t sec, uint32_t msec);
 
-    void setTimerSpec(uint32_t sec, uint32_t nano);
-    void waitTimer();
-    void startTimer();
-    void tick();
-    double tock();
-
+    // Destructor to clean up resources
     virtual ~cTimer();
+
+    // Set the timer specifications
+    void setTimerSpec(uint32_t sec, uint32_t nano);
+
+    // Start the timer
+    void startTimer();
+
+    // Wait for the timer to expire
+    void waitTimer();
+
+    // Record the start time
+    void tick();
+
+    // Calculate and return the elapsed time in milliseconds
+    double tock();
 };
 
 #endif /* CTIMER_H_ */

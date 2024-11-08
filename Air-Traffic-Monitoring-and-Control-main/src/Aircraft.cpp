@@ -1,6 +1,8 @@
 #include "Aircraft.h"
 #include <iostream>
 #include <sys/neutrino.h>
+#include <sys/dispatch.h>
+#include <cstring>
 
 Aircraft::Aircraft() {}
 
@@ -62,9 +64,9 @@ void Aircraft::move() {
 }
 
 void Aircraft::listen(const std::string& attachPoint) {
-    auto* attach = name_attach(nullptr, attachPoint.c_str(), 0);
+    name_attach_t* attach = name_attach(nullptr, attachPoint.c_str(), 0);
     if (!attach) {
-        std::cerr << "Error creating the attach point." << std::endl;
+        std::cerr << "Error creating the attach point: " << strerror(errno) << std::endl;
         return;
     }
 
@@ -72,8 +74,10 @@ void Aircraft::listen(const std::string& attachPoint) {
     while (isRunning) {
         int rcvid = MsgReceive(attach->chid, &aircraftCommand, sizeof(aircraftCommand), nullptr);
         if (rcvid == -1) {
-            break; // Error condition, exit loop
+            std::cerr << "Error receiving message: " << strerror(errno) << std::endl;
+            break;
         }
+
         if (rcvid == 0) {
             // Handle pulse
             switch (aircraftCommand.header.code) {
@@ -88,25 +92,45 @@ void Aircraft::listen(const std::string& attachPoint) {
 
         // Process command
         if (aircraftCommand.header.type == 0x00) {
-            if (aircraftCommand.header.subtype == 0x01) {
-                aircraftCommand.flightId = flightId;
-                aircraftCommand.positionX = positionX;
-                aircraftCommand.positionY = positionY;
-                aircraftCommand.positionZ = positionZ;
-                aircraftCommand.speedX = speedX;
-                aircraftCommand.speedY = speedY;
-                aircraftCommand.speedZ = speedZ;
-                MsgReply(rcvid, EOK, &aircraftCommand, sizeof(aircraftCommand));
-            } else if (aircraftCommand.header.subtype == 0x02) {
-                setSpeedX(aircraftCommand.speedX);
-                setSpeedY(aircraftCommand.speedY);
-                setSpeedZ(aircraftCommand.speedZ);
-                MsgReply(rcvid, EOK, nullptr, 0);
-            } else {
-                MsgError(rcvid, ENOSYS);
+            switch (aircraftCommand.header.subtype) {
+                case 0x01:
+                    // Respond with current aircraft data
+                    aircraftCommand.flightId = flightId;
+                    aircraftCommand.positionX = positionX;
+                    aircraftCommand.positionY = positionY;
+                    aircraftCommand.positionZ = positionZ;
+                    aircraftCommand.speedX = speedX;
+                    aircraftCommand.speedY = speedY;
+                    aircraftCommand.speedZ = speedZ;
+                    MsgReply(rcvid, EOK, &aircraftCommand, sizeof(aircraftCommand));
+                    break;
+
+                case 0x02:
+                    // Update speed with new values
+                    setSpeedX(aircraftCommand.speedX);
+                    setSpeedY(aircraftCommand.speedY);
+                    setSpeedZ(aircraftCommand.speedZ);
+                    MsgReply(rcvid, EOK, nullptr, 0);
+                    break;
+
+                default:
+                    MsgError(rcvid, ENOSYS);
+                    break;
             }
+        } else {
+            MsgError(rcvid, ENOSYS);
         }
     }
 
-    name_detach(attach, 0);
+    // Clean up the attach point
+    if (name_detach(attach, 0) == -1) {
+        std::cerr << "Error detaching name attach point: " << strerror(errno) << std::endl;
+    }
+}
+
+void* Aircraft::aircraftListenHelper(void* args) {
+    AircraftListenArgs* listenArgs = static_cast<AircraftListenArgs*>(args);
+    listenArgs->aircraft->listen(listenArgs->attachPoint);
+    delete listenArgs;
+    return nullptr;
 }

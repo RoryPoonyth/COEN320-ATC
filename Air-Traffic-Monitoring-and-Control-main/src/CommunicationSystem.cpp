@@ -7,7 +7,7 @@
 #include <cerrno> // for errno
 #include <cstring> // for strerror
 
-constexpr char BASE_ATTACH_POINT[] = "default";
+#define ATTACH_POINT "default"
 
 CommunicationSystem::CommunicationSystem() {}
 
@@ -20,7 +20,7 @@ CommunicationSystem::CommunicationSystem() {}
  * @return true if the message was sent successfully, false otherwise.
  */
 bool CommunicationSystem::relayNewSpeed(Aircraft& aircraft, int newSpeedX, int newSpeedY, int newSpeedZ) {
-    std::string attachPoint = std::string(BASE_ATTACH_POINT) + "_" + std::to_string(aircraft.getFlightId());
+    std::string attachPoint = std::string(ATTACH_POINT) + "_" + std::to_string(aircraft.getFlightId());
 
     int attempts = 0;
     constexpr int max_attempts = 3;

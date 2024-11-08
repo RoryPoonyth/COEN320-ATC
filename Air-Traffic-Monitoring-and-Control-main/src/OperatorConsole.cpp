@@ -4,155 +4,294 @@
 #include "Aircraft.h"
 
 #include <sys/dispatch.h>
-#include <fstream>
-#include <iostream>
-#include <thread>
+#include <vector>
 #include <string>
 
-constexpr char ATTACH_POINT[] = "default";
+#define ATTACH_POINT "default" // Define the base attach point for communication
 
-OperatorConsole::OperatorConsole() {}
+using namespace std;
 
-void OperatorConsole::writeLog(const std::string& log_entry) {
-    std::ofstream logFile("/data/home/qnxuser/OperatorLog.txt", std::ios::app);
-    if (!logFile) {
-        std::cerr << "Operator commands could not be logged. Error opening log file." << std::endl;
-    } else {
-        logFile << log_entry << std::endl;
-    }
+// Constructor to initialize the OperatorConsole object
+OperatorConsole::OperatorConsole() {
 }
 
+// Logs operator commands to a file
+void OperatorConsole::writeLog(string log_entry){
+	int code = creat("/data/home/qnxuser/OperatorLog.txt", S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+	if (code == -1) {
+		std::cout << "Operator commands could not be logged, error" << endl;
+	} else {
+		// Create a buffer to write to the file according to QNX requirements
+		char *blockBuffer = new char[log_entry.length() + 1];
+		sprintf(blockBuffer, "%s", log_entry.c_str());
+		write(code, blockBuffer, log_entry.length() + 1);
+		write(code, "\n", 1);
+		delete[] blockBuffer; // Free the buffer memory
+		close(code); // Close the file after writing
+	}
+}
+
+// Initializes a thread to listen for operator input
 void* OperatorConsole::listenForOperatorInput(void* args) {
-    auto* operatorConsole = static_cast<OperatorConsole*>(args);
-    operatorConsole->listenForUserInput();
-    return nullptr;
+	OperatorConsole* operatorConsole = (OperatorConsole*)args;
+	operatorConsole->listenForUserInput();
+	return NULL;
 }
 
+// Initializes a thread to update an aircraft's speed
+void* OperatorConsole::updateAircraftSpeedThread(void* args) {
+	OperatorConsole* operatorConsole = (OperatorConsole*)args;
+	operatorConsole->updateAircraftSpeed();
+	return NULL;
+}
+
+// Initializes a thread to display aircraft data
+void* OperatorConsole::displayAircraftDataThread(void* args) {
+	OperatorConsole* operatorConsole = (OperatorConsole*)args;
+	operatorConsole->displayAircraftData();
+	return NULL;
+}
+
+/**
+ * Listen for user input to execute specific commands such as displaying aircraft info,
+ * updating aircraft speed, or adjusting separation constraints.
+ */
 void OperatorConsole::listenForUserInput() {
-    while (true) {
-        int commandType, flightId;
-        std::string log_entry;
+	while (true) { // Continuously listen for user commands
+		int commandType; // Store the type of command
+		int flightId; // Store the flight ID
 
-        std::cout << "\nEnter your choice (1: Display aircraft info, 2: Update speed, 3: Separation constraint): ";
-        std::cin >> commandType;
+		// Prompt the user for input
+		cout << endl << "Enter your choice... (1 to display an aircraft's info, 2 to update an aircraft's speed, 3 for separation constraint)" << endl;
+		cin >> commandType;
 
-        switch (commandType) {
-            case 1:
-                std::cout << "\nEnter Flight Id: ";
-                std::cin >> flightId;
-                log_entry = "Display flight info for flight #" + std::to_string(flightId);
-                writeLog(log_entry);
-                displayAircraftInfo(flightId);
-                break;
+		// Command to display aircraft info
+        if (commandType == 1) {
+        	cout << endl << "Enter Flight Id: ";
+			cin >> flightId;
+        	log_entry += "display flight info for flight #" + std::to_string(flightId);
+        	writeLog(log_entry); // Log the command
+        	log_entry = "";
 
-            case 2: {
-                std::cout << "\nEnter Flight Id: ";
-                std::cin >> flightId;
+        	// Start a thread to display aircraft data
+        	pthread_t displayDataThread;
+            pthread_create(&displayDataThread, nullptr, &OperatorConsole::displayAircraftDataThread, this);
 
-                int newSpeedX, newSpeedY, newSpeedZ;
-                std::cout << "\nEnter SpeedX: ";
-                std::cin >> newSpeedX;
-                std::cout << "Enter SpeedY: ";
-                std::cin >> newSpeedY;
-                std::cout << "Enter SpeedZ: ";
-                std::cin >> newSpeedZ;
+			AircraftData aircraftCommand;
+			aircraftCommand.header.type = 0x04;
+			aircraftCommand.header.subtype = 0x02;
+			aircraftCommand.flightId = flightId;
 
-                log_entry = "Change flight speed for flight #" + std::to_string(flightId) +
-                            "\nNew speeds (X,Y,Z) = (" + std::to_string(newSpeedX) + "," +
-                            std::to_string(newSpeedY) + "," + std::to_string(newSpeedZ) + ")";
-                writeLog(log_entry);
+			sleep(1); // Delay to allow the system to create/attach channels
 
-                updateAircraftSpeed(flightId, newSpeedX, newSpeedY, newSpeedZ);
-                break;
-            }
+			// Generate the unique attach point name
+			string attachPoint = string(ATTACH_POINT) + "info";
 
-            case 3: {
-                int n, p;
-                std::cout << "\nEnter N seconds for separation constraint: ";
-                std::cin >> n;
-                std::cout << "Enter interval for separation constraint: ";
-                std::cin >> p;
+			// Establish communication
+			int coid;
+			if ((coid = name_open(attachPoint.c_str(), 0)) == -1) {
+				perror("Error occurred while attaching the channel listenForUserInput FUNCTION [1]");
+				return;
+			}
 
-                log_entry = "Change separation constraint: New input N and P = " + std::to_string(n) + ", " + std::to_string(p);
-                writeLog(log_entry);
+			// Send data expecting no response
+			if (MsgSend(coid, &aircraftCommand, sizeof(aircraftCommand), NULL, 0) == -1) {
+				cout << "Error while sending the message for aircraft: " << strerror(errno) << endl;
+				name_close(coid);
+				return;
+			}
 
-                setSeparationConstraint(n, p);
-                break;
-            }
+		// Command to update aircraft speed
+		} else if (commandType == 2) {
+			cout << endl << "Enter Flight Id: ";
+			cin >> flightId;
+        	log_entry += "Change flight speed for flight #" + std::to_string(flightId) + "\nNew speeds (X,Y,Z) = (";
 
-            default:
-                std::cerr << "Invalid command type." << std::endl;
-                break;
-        }
-    }
+			// Start a thread to update aircraft speed
+			pthread_t updateAircraftSpeedThread;
+			pthread_create(&updateAircraftSpeedThread, nullptr, &OperatorConsole::updateAircraftSpeedThread, this);
+
+			int newSpeedX, newSpeedY, newSpeedZ;
+
+			// Get new speeds from user
+			cout << endl << "Enter SpeedX: ";
+			cin >> newSpeedX;
+            log_entry += std::to_string(newSpeedX) + ",";
+			cout << endl << "Enter SpeedY: ";
+			cin >> newSpeedY;
+            log_entry += std::to_string(newSpeedY) + ",";
+			cout << endl << "Enter SpeedZ: ";
+			cin >> newSpeedZ;
+            log_entry += std::to_string(newSpeedZ) + ")";
+            writeLog(log_entry); // Log the command
+            log_entry = "";
+
+			AircraftData aircraftCommand;
+			aircraftCommand.header.type = 0x04;
+			aircraftCommand.header.subtype = 0x01;
+			aircraftCommand.flightId = flightId;
+			aircraftCommand.speedX = newSpeedX;
+			aircraftCommand.speedY = newSpeedY;
+			aircraftCommand.speedZ = newSpeedZ;
+
+			// Generate the unique attach point name
+			string attachPoint = string(ATTACH_POINT) + "inner_transfer";
+
+			// Establish communication
+			int coid;
+			if ((coid = name_open(attachPoint.c_str(), 0)) == -1) {
+				perror("Error occurred while attaching the channel listenForUserInput FUNCTION [2]");
+				return;
+			}
+
+			// Send data expecting no response
+			if (MsgSend(coid, &aircraftCommand, sizeof(aircraftCommand), NULL, 0) == -1) {
+				cout << "Error while sending the message for aircraft: " << strerror(errno) << endl;
+				name_close(coid);
+				return;
+			}
+
+		// Command to update separation constraints
+		} else if (commandType == 3) {
+			log_entry += "Change input N and interval P at runtime for separation constraint\nNew input N and P: ";
+
+			// Get new N and P values from user
+			int n;
+			cout << endl << "Enter N seconds for separation constraint: ";
+			cin >> n;
+			log_entry += std::to_string(n) + ", ";
+			int p;
+			cout << endl << "Enter interval for separation constraint: ";
+			cin >> p;
+			log_entry += std::to_string(p) + "\n";
+			writeLog(log_entry); // Log the command
+			log_entry = "";
+
+			// Generate the unique attach point name
+			string attachPoint = string(ATTACH_POINT) + "_separation";
+
+			// Establish communication
+			int coid;
+			if ((coid = name_open(attachPoint.c_str(), 0)) == -1) {
+				perror("Error occurred while attaching the channel listenForUserInput FUNCTION [3]");
+				return;
+			}
+
+			SeparationData separationCommand;
+			separationCommand.n_seconds = n;
+			separationCommand.p_interval = p;
+
+			// Send data expecting no response
+			if (MsgSend(coid, &separationCommand, sizeof(separationCommand), NULL, 0) == -1) {
+				cout << "Error while sending the message for computer system: " << strerror(errno) << endl;
+				name_close(coid);
+				return;
+			}
+		} else {
+			cout << "Invalid command type." << endl; // Invalid command input
+		}
+	}
 }
 
-void OperatorConsole::displayAircraftInfo(int flightId) {
-    std::string attachPoint = std::string(ATTACH_POINT) + "_info";
-    AircraftData aircraftCommand = {};
-    aircraftCommand.header.type = 0x04;
-    aircraftCommand.header.subtype = 0x02;
-    aircraftCommand.flightId = flightId;
+// Updates the speed of an aircraft based on received commands
+void* OperatorConsole::updateAircraftSpeed() {
+	name_attach_t *attach;
 
-    int coid = name_open(attachPoint.c_str(), 0);
-    if (coid == -1) {
-        std::cerr << "Error attaching to channel in displayAircraftInfo: " << strerror(errno) << std::endl;
-        return;
-    }
+	// Generate the unique attach point name
+	string attachPointInner = string(ATTACH_POINT) + "inner_transfer";
 
-    if (MsgSend(coid, &aircraftCommand, sizeof(aircraftCommand), nullptr, 0) == -1) {
-        std::cerr << "Error sending message in displayAircraftInfo: " << strerror(errno) << std::endl;
-        name_close(coid);
-        return;
-    }
+	// Create an attach point for the update command
+	if ((attach = name_attach(NULL, attachPointInner.c_str(), 0)) == NULL) {
+		perror("Error occurred while creating the attach point updateAircraftSpeed");
+		return (void*)EXIT_FAILURE;
+	}
 
-    name_close(coid);
+	AircraftData aircraftCommand;
+	while (true) {
+		int rcvid = MsgReceive(attach->chid, &aircraftCommand, sizeof(aircraftCommand), NULL);
+
+		if (rcvid == -1) { // Error condition
+			break;
+		}
+
+		// Update speed if command type matches expected values
+		if (aircraftCommand.header.type == 0x04 && aircraftCommand.header.subtype == 0x01) {
+			MsgReply(rcvid, EOK, NULL, 0);
+			name_detach(attach, 0);
+
+			// Establish connection for the update
+			int coid;
+			if ((coid = name_open(ATTACH_POINT, 0)) == -1) {
+				perror("Error occurred while attaching the channel UPDATEAIRCRAFTSPEED FUNCTION");
+				return (void*)EXIT_FAILURE;
+			}
+
+			aircraftCommand.header.type = 0x02;
+			aircraftCommand.header.subtype = 0x00;
+
+			// Send updated speed command expecting no response
+			if (MsgSend(coid, &aircraftCommand, sizeof(aircraftCommand), NULL, 0) == -1) {
+				cout << "Error while sending the message for aircraft CSOP " << ": " << strerror(errno) << endl;
+				name_close(coid);
+				return (void*)EXIT_FAILURE;
+			}
+
+			break;
+		}
+	}
+
+	return EXIT_SUCCESS;
 }
 
-void OperatorConsole::updateAircraftSpeed(int flightId, int newSpeedX, int newSpeedY, int newSpeedZ) {
-    std::string attachPoint = std::string(ATTACH_POINT) + "_inner_transfer";
-    AircraftData aircraftCommand = {};
-    aircraftCommand.header.type = 0x04;
-    aircraftCommand.header.subtype = 0x01;
-    aircraftCommand.flightId = flightId;
-    aircraftCommand.speedX = newSpeedX;
-    aircraftCommand.speedY = newSpeedY;
-    aircraftCommand.speedZ = newSpeedZ;
+// Displays specific aircraft data based on received commands
+void* OperatorConsole::displayAircraftData() {
+	name_attach_t *attach;
 
-    int coid = name_open(attachPoint.c_str(), 0);
-    if (coid == -1) {
-        std::cerr << "Error attaching to channel in updateAircraftSpeed: " << strerror(errno) << std::endl;
-        return;
-    }
+	// Generate the unique attach point name
+	string attachPointInner = string(ATTACH_POINT) + "info";
 
-    if (MsgSend(coid, &aircraftCommand, sizeof(aircraftCommand), nullptr, 0) == -1) {
-        std::cerr << "Error sending message in updateAircraftSpeed: " << strerror(errno) << std::endl;
-        name_close(coid);
-        return;
-    }
+	// Create an attach point for the data display command
+	if ((attach = name_attach(NULL, attachPointInner.c_str(), 0)) == NULL) {
+		perror("Error occurred while creating the attach point displayAircraftData");
+		return (void*)EXIT_FAILURE;
+	}
 
-    name_close(coid);
+	AircraftData aircraftCommand;
+	while (true) {
+		int rcvid = MsgReceive(attach->chid, &aircraftCommand, sizeof(aircraftCommand), NULL);
+
+		if (rcvid == -1) { // Error condition
+			break;
+		}
+
+		// Display data if command type matches expected values
+		if (aircraftCommand.header.type == 0x04 && aircraftCommand.header.subtype == 0x02) {
+			int coid;
+			if ((coid = name_open(ATTACH_POINT, 0)) == -1) {
+				perror("Error occurred while attaching the channel DISPLAYAIRCRAFTDATA FUNCTION");
+				return (void*)EXIT_FAILURE;
+			}
+
+			aircraftCommand.header.type = 0x02;
+			aircraftCommand.header.subtype = 0x01;
+
+			// Send aircraft data expecting no response
+			if (MsgSend(coid, &aircraftCommand, sizeof(aircraftCommand), NULL, 0) == -1) {
+				cout << "Error while sending the message for aircraft CSOP " << ": " << strerror(errno) << endl;
+				name_close(coid);
+				return (void*)EXIT_FAILURE;
+			}
+
+			MsgReply(rcvid, EOK, NULL, 0);
+			name_detach(attach, 0);
+
+			break;
+		}
+	}
+
+	return EXIT_SUCCESS;
 }
 
-void OperatorConsole::setSeparationConstraint(int n, int p) {
-    std::string attachPoint = std::string(ATTACH_POINT) + "_separation";
-    SeparationData separationCommand = {};
-    separationCommand.n_seconds = n;
-    separationCommand.p_interval = p;
-
-    int coid = name_open(attachPoint.c_str(), 0);
-    if (coid == -1) {
-        std::cerr << "Error attaching to channel in setSeparationConstraint: " << strerror(errno) << std::endl;
-        return;
-    }
-
-    if (MsgSend(coid, &separationCommand, sizeof(separationCommand), nullptr, 0) == -1) {
-        std::cerr << "Error sending message in setSeparationConstraint: " << strerror(errno) << std::endl;
-        name_close(coid);
-        return;
-    }
-
-    name_close(coid);
+// Destructor: Cleans up resources (if any)
+OperatorConsole::~OperatorConsole() {
 }
-
-OperatorConsole::~OperatorConsole() {}

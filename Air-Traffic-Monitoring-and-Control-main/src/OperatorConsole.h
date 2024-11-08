@@ -1,26 +1,45 @@
-#pragma once
+#ifndef SRC_OPERATORCONSOLE_H_
+#define SRC_OPERATORCONSOLE_H_
 
 #include <string>
+#include <vector>
 #include <iostream>
 #include <sys/dispatch.h>
 
+using namespace std;
+
+// The OperatorConsole class handles user input for managing aircraft information and logging commands
 class OperatorConsole {
+private:
+	string log_entry = ""; // Stores log entries to record operator commands
+
 public:
-    OperatorConsole();
+	// Constructor to initialize the OperatorConsole object
+	OperatorConsole();
 
-    // Thread function for listening to operator input
-    static void* listenForOperatorInput(void* args);  // Added declaration for threading
+	// Static initializer function for creating a thread to listen for operator input
+	static void* listenForOperatorInput(void* args);
 
-    // Member function to handle user input (used by the thread)
-    void listenForUserInput();
+	// Static initializer function for creating a thread to display specific aircraft data
+	static void* displayAircraftDataThread(void* args);
 
-    // Other command functions
-    void displayAircraftInfo(int flightId);
-    void updateAircraftSpeed(int flightId, int newSpeedX, int newSpeedY, int newSpeedZ);
-    void setSeparationConstraint(int n, int p);
+	// Static initializer function for creating a thread to update an aircraft's speed
+	static void* updateAircraftSpeedThread(void* args);
 
-    // Log function
-    void writeLog(const std::string& log_entry);
+	// Function to continuously listen for user input and process commands
+	void listenForUserInput();
 
-    ~OperatorConsole();
+	// Function to update the speed of an aircraft based on user input
+	void* updateAircraftSpeed();
+
+	// Function to display information about a specific aircraft
+	void* displayAircraftData();
+
+	// Destructor to clean up resources used by the OperatorConsole object
+	virtual ~OperatorConsole();
+
+	// Logs the operator commands to a file
+	void writeLog(string log_entry);
 };
+
+#endif /* SRC_OPERATORCONSOLE_H_ */

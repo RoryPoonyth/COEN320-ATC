@@ -1,58 +1,67 @@
 #include "CommunicationSystem.h"
 #include "Aircraft.h"
 
-#include <iostream>
 #include <string>
 #include <sys/dispatch.h>
-#include <cerrno> // for errno
-#include <cstring> // for strerror
 
-#define ATTACH_POINT "default"
+using namespace std;
 
-CommunicationSystem::CommunicationSystem() {}
+#define ATTACH_POINT "default" // Defines the base attach point for communication
 
-/**
- * Relay new speed to the specified aircraft.
- * @param aircraft The Aircraft to which speed update is to be relayed.
- * @param newSpeedX New X speed for the aircraft.
- * @param newSpeedY New Y speed for the aircraft.
- * @param newSpeedZ New Z speed for the aircraft.
- * @return true if the message was sent successfully, false otherwise.
- */
-bool CommunicationSystem::relayNewSpeed(Aircraft& aircraft, int newSpeedX, int newSpeedY, int newSpeedZ) {
-    std::string attachPoint = std::string(ATTACH_POINT) + "_" + std::to_string(aircraft.getFlightId());
-
-    int attempts = 0;
-    constexpr int max_attempts = 3;
-    while (attempts < max_attempts) {
-        // Attempt to open the communication channel
-        int id = name_open(attachPoint.c_str(), 0);
-        if (id != -1) {
-            // Prepare the command to update aircraft speed
-            AircraftData aircraftCommand{};
-            aircraftCommand.header.type = 0x00;
-            aircraftCommand.header.subtype = 0x02;
-            aircraftCommand.speedX = newSpeedX;
-            aircraftCommand.speedY = newSpeedY;
-            aircraftCommand.speedZ = newSpeedZ;
-
-            // Send the command
-            if (MsgSend(id, &aircraftCommand, sizeof(aircraftCommand), nullptr, 0) == -1) {
-                std::cerr << "Error sending new speed data: " << strerror(errno) << std::endl;
-                name_close(id);
-                return false;
-            }
-
-            name_close(id);
-            return true;
-        } else {
-            ++attempts;
-            std::cerr << "Attempt " << attempts << " to open channel failed." << std::endl;
-        }
-    }
-
-    std::cerr << "ERROR: Failed to open communication channel after " << max_attempts << " attempts." << std::endl;
-    return false;
+// Constructor for CommunicationSystem class, initializes the communication system
+CommunicationSystem::CommunicationSystem() {
 }
 
-CommunicationSystem::~CommunicationSystem() {}
+/**
+ * Relay new speed values to a specific Aircraft based on flightId.
+ * This function attempts to establish a communication channel with the target aircraft
+ * and sends updated speed values for the x, y, and z axes.
+ *
+ * @param R Reference to the Aircraft object to relay new speed values to.
+ * @param newSpeedX New speed value for the x-axis.
+ * @param newSpeedY New speed value for the y-axis.
+ * @param newSpeedZ New speed value for the z-axis.
+ * @return A void pointer to indicate success or failure (EXIT_SUCCESS or EXIT_FAILURE).
+ */
+void* CommunicationSystem::relayNewSpeed(Aircraft &R, int newSpeedX, int newSpeedY, int newSpeedZ) {
+	// Generate a unique attach point name by appending the flight ID to the base attach point
+	string attachPoint = string(ATTACH_POINT) + "_" + to_string(R.getFlightId());
+
+	int attempts = 0; // Counter for attempts to establish a connection
+
+	// Try up to 3 attempts to open a communication channel
+	while (attempts < 3) {
+		// Attempt to open the communication channel with the target aircraft
+		int id = name_open(attachPoint.c_str(), 0);
+		if (id != -1) { // If the channel opens successfully
+			// Create and configure the AircraftData command message
+			AircraftData aircraftCommand;
+			aircraftCommand.header.type = 0x00; // Type to specify a command
+			aircraftCommand.header.subtype = 0x02; // Subtype for a speed update command
+			aircraftCommand.speedX = newSpeedX; // Set new speed for x-axis
+			aircraftCommand.speedY = newSpeedY; // Set new speed for y-axis
+			aircraftCommand.speedZ = newSpeedZ; // Set new speed for z-axis
+
+			// Send the new speed data with no expected response
+			if (MsgSend(id, &aircraftCommand, sizeof(aircraftCommand), NULL, 0) == -1) {
+				cout << "Error while sending new speed data: " << strerror(errno) << endl;
+				name_close(id); // Close the channel in case of an error
+				return (void*)EXIT_FAILURE; // Return failure
+			}
+
+			name_close(id); // Close the channel after successful transmission
+			return EXIT_SUCCESS; // Return success
+		} else {
+			// If opening the channel fails, increment attempt counter and retry
+			attempts++;
+		}
+	}
+
+	// If all attempts fail, print error message and return failure
+	cout << "ERROR: Failed to attach the channel." << endl;
+	return (void*)EXIT_FAILURE;
+}
+
+// Destructor for CommunicationSystem class, cleans up resources (if any)
+CommunicationSystem::~CommunicationSystem() {
+}

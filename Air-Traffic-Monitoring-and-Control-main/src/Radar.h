@@ -1,34 +1,38 @@
-#pragma once
+#ifndef SRC_RADAR_H_
+#define SRC_RADAR_H_
 
 #include "Aircraft.h"
 #include <vector>
-#include <atomic>
 
+using namespace std;
+
+// Radar class: Responsible for tracking aircraft positions and relaying their data
 class Radar {
 public:
-    Radar();
-    Radar(const std::vector<Aircraft*>& aircrafts);
-    Radar(Aircraft* aircraft);
+	// Default constructor to initialize a Radar object
+	Radar();
 
-    // Initializes radar and starts pinging aircraft
-    static void* radarInitializer(void* args); // Static function used as a thread entry point
+	// Constructor to initialize Radar with a list of Aircraft objects
+	Radar(vector<Aircraft> &aircrafts);
 
-    // Pings aircraft in the system
-    void pingAircraft();
+	// Constructor to initialize Radar with a single Aircraft object
+	Radar(Aircraft &aircraft);
 
-    // Requests a ping for a specific aircraft by flight ID
-    AircraftData requestPingForAircraft(int flightId) const;
+	// Static initializer function for creating a thread to start radar operations
+	static void* radarInitializer(void* args);
 
-    ~Radar();
+	// Continuously pings aircraft to request their current position and speed
+	void* pingAircraft();
 
-    // Delete copy constructor and assignment operator
-    Radar(const Radar&) = delete;
-    Radar& operator=(const Radar&) = delete;
+	// Requests the position and speed of a specific aircraft based on its flight ID
+	AircraftData operatorRequestPingAircraft(int flightId);
+
+	// Destructor to clean up resources used by the Radar object
+	virtual ~Radar();
 
 private:
-    Aircraft* aircraft = nullptr; // Use a pointer instead of a direct object to avoid copying
-    std::vector<Aircraft*> aircrafts; // Store a list of pointers to Aircraft objects
-
-    void handlePulse(const AircraftData& aircraftCommand) const;
-    void handleAircraftRequest(int rcvid, AircraftData& aircraftCommand) const;
+	Aircraft aircraft; // Single Aircraft object for individual tracking
+	vector<Aircraft> aircrafts; // Vector of Aircraft objects for group tracking
 };
+
+#endif /* SRC_RADAR_H_ */

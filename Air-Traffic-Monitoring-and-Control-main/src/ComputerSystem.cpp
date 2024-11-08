@@ -6,291 +6,324 @@
 #include <sys/dispatch.h>
 #include <vector>
 #include <string>
-#include <thread>
-#include <memory>
-#include <chrono>
-#include <iostream>
 
-#define ATTACH_POINT "default"
+#define ATTACH_POINT "default" // Define the base attach point for communication
 
-ComputerSystem::ComputerSystem() {}
+using namespace std;
 
-void ComputerSystem::setAircrafts(const std::vector<Aircraft*>& aircrafts) {
-    this->aircrafts = aircrafts;
+// Constructor to initialize the ComputerSystem object
+ComputerSystem::ComputerSystem() {
 }
 
+// Sets the list of Aircraft objects that this ComputerSystem will manage
+void ComputerSystem::setAircrafts(std::vector<Aircraft*> aircrafts) {
+	this->aircrafts = aircrafts;
+}
+
+// Retrieves an Aircraft object based on its flight ID
 Aircraft* ComputerSystem::getAircraftByFlightId(int flightId) {
-    for (Aircraft* aircraft : aircrafts) {
-        if (aircraft->getFlightId() == flightId) {
-            return aircraft;
-        }
-    }
-    return nullptr;
+	for (Aircraft* aircraft : aircrafts) {
+		if (aircraft->getFlightId() == flightId) {
+			return aircraft;
+		}
+	}
+	return nullptr; // Return nullptr if no aircraft matches the flight ID
 }
 
+// Static function to start the map display thread
 void* ComputerSystem::MapDisplayThread(void* args) {
-    ComputerSystem* computerSystem = static_cast<ComputerSystem*>(args);
-    computerSystem->MapDisplay();
-    return nullptr;
+	ComputerSystem* computerSystem = (ComputerSystem*)args;
+	computerSystem->MapDisplay();
+	return NULL;
 }
 
+// Static function to start the computer system operations thread
 void* ComputerSystem::computerSystemThread(void* args) {
-    ComputerSystem* computerSystem = static_cast<ComputerSystem*>(args);
-    computerSystem->computerSystemOperations();
-    return nullptr;
+	ComputerSystem* computerSystem = (ComputerSystem*)args;
+	computerSystem->computerSystemOperations();
+	return NULL;
 }
 
-void* ComputerSystem::separationCheckThread(void* args) {
-    ComputerSystem* computerSystem = static_cast<ComputerSystem*>(args);
-    computerSystem->separationCheck();
-    return nullptr;
+// Static function to start the separation check thread
+void* ComputerSystem::separationCheckThread(void* args){
+	ComputerSystem* computerSystem = (ComputerSystem*)args;
+	computerSystem->separationCheck();
+	return NULL;
 }
 
 /**
- * Function to Display 2D Map
+ * Function to display a 2D map of aircraft positions, updating every 5 seconds.
  */
 void* ComputerSystem::MapDisplay() {
-    while (true) {
-        std::vector<AircraftData> aircraftsInfo;
-        Radar radar;
+	while (true) { // Infinite loop with a 5-second delay between each iteration
+		vector<AircraftData> aircraftsInfo; // Vector to hold data of all aircrafts
+		Radar radar; // Radar object to get data from each aircraft
 
-        // Vector for managing listen threads
-        std::vector<std::thread> threads;
+		// Vector to hold threads for each aircraft's listener
+		vector<pthread_t> threads;
 
-        // Create the Aircraft listen threads for each aircraft
-        for (auto& aircraft : aircrafts) {
-            std::string attachPointRAD = std::string(ATTACH_POINT) + "_" + std::to_string(aircraft->getFlightId());
-            threads.emplace_back(&Aircraft::aircraftListenHelper, new AircraftListenArgs{aircraft, attachPointRAD});
-        }
+		// Create listener threads for each aircraft
+		for (size_t i = 0; i < aircrafts.size(); i++) {
+			string attachPointRAD = string(ATTACH_POINT) + "_" + to_string(aircrafts[i]->getFlightId());
+			pthread_t thread;
+			AircraftListenArgs* args = new AircraftListenArgs{aircrafts[i], attachPointRAD};
+			pthread_create(&thread, NULL, &Aircraft::aircraftListenHelper, args);
+			threads.push_back(thread); // Store thread for later cleanup
+		}
 
-        // Store received aircraft info into aircraftsInfo vector
-        for (auto& aircraft : aircrafts) {
-            // Replacing the incorrect method name with the correct one
-            AircraftData aircraftResult = radar.requestPingForAircraft(aircraft->getFlightId());
-            aircraftsInfo.push_back(aircraftResult);
-        }
+		// Retrieve aircraft data from Radar and store in aircraftsInfo
+		for (size_t i = 0; i < aircrafts.size(); i++) {
+			AircraftData aircraftResult = radar.operatorRequestPingAircraft(aircrafts[i]->getFlightId());
+			aircraftsInfo.push_back(aircraftResult);
+		}
 
-        // Join all listen threads created during this period
-        for (auto& thread : threads) {
-            if (thread.joinable()) {
-                thread.join();
-            }
-        }
+		// Clean up listener threads created during this period
+		for (pthread_t thread : threads) {
+			pthread_cancel(thread);
+		}
 
-        // Set header type and subtype for communication with DataDisplay
-        aircraftsInfo[0].header.type = 0x05;
-        aircraftsInfo[0].header.subtype = 0x05;
+		// Set header type and subtype for communication with DataDisplay
+		aircraftsInfo[0].header.type = 0x05;
+		aircraftsInfo[0].header.subtype = 0x05;
 
-        std::string attachPointDataDisplay = std::string(ATTACH_POINT) + "_MAP";
+		string attachPointDataDisplay = string(ATTACH_POINT) + "_MAP"; // Attach point for DataDisplay
 
-        // Establish connection (communication) with DataDisplay
-        int coid;
-        if ((coid = name_open(attachPointDataDisplay.c_str(), 0)) == -1) {
-            perror("ComputerSystem (MapDisplay): Error occurred while attaching the channel");
-            return reinterpret_cast<void*>(EXIT_FAILURE);
-        }
+		// Establish connection with DataDisplay
+		int coid;
+		if ((coid = name_open(attachPointDataDisplay.c_str(), 0)) == -1) {
+			perror("ComputerSystem (MapDisplay): Error occurred while attaching the channel");
+			return (void*)EXIT_FAILURE;
+		}
 
-        // Send aircrafts info to DataDisplay for Map, expect no response
-        if (MsgSend(coid, &aircraftsInfo, sizeof(aircraftsInfo), nullptr, 0) == -1) {
-            std::cout << "Error while sending the message: " << strerror(errno) << std::endl;
-            name_close(coid);
-            return reinterpret_cast<void*>(EXIT_FAILURE);
-        }
+		// Send aircraft data to DataDisplay, expect no response
+		if (MsgSend(coid, &aircraftsInfo, sizeof(aircraftsInfo), NULL, 0) == -1) {
+			cout << "Error while sending the message: " << strerror(errno) << endl;
+			name_close(coid);
+			return (void*)EXIT_FAILURE;
+		}
 
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-    }
+		sleep(5); // Wait for 5 seconds before updating the map again
+	}
 
-    return reinterpret_cast<void*>(EXIT_SUCCESS);
+	return EXIT_SUCCESS;
 }
 
 /**
- * Computer System Operations based on OperatorConsole requests
+ * Handles Computer System operations based on requests from OperatorConsole:
  * 1. Update Aircraft Speed (via CommunicationSystem)
- * 2. Return Aircraft Information (via Radar)
+ * 2. Retrieve Aircraft Information (via Radar)
  */
 void ComputerSystem::computerSystemOperations() {
-    name_attach_t* attach;
+	name_attach_t *attach;
 
-    if ((attach = name_attach(nullptr, ATTACH_POINT, 0)) == nullptr) {
-        perror("Error occurred while creating the attach point sendNewAircraftSpeedToCommunicationSystem");
-        return;
-    }
+	// Create attach point for receiving messages
+	if ((attach = name_attach(NULL, ATTACH_POINT, 0)) == NULL) {
+		perror("Error occurred while creating the attach point sendNewAircraftSpeedToCommunicationSystem");
+	}
 
-    int newSpeedX, newSpeedY, newSpeedZ;
-    AircraftData aircraftCommand;
+	int newSpeedX, newSpeedY, newSpeedZ; // Variables for new speed values
+	AircraftData aircraftCommand; // Struct to hold incoming aircraft commands
 
-    while (true) {
-        int rcvid = MsgReceive(attach->chid, &aircraftCommand, sizeof(aircraftCommand), nullptr);
+	while (true) {
+		int rcvid = MsgReceive(attach->chid, &aircraftCommand, sizeof(aircraftCommand), NULL);
 
-        if (rcvid == -1) { // Error condition, exit
-            break;
-        }
+		if (rcvid == -1) { // Error condition, exit loop
+			break;
+		}
 
-        if (aircraftCommand.header.type == 0x02 && aircraftCommand.header.subtype == 0x00) {
-            newSpeedX = aircraftCommand.speedX;
-            newSpeedY = aircraftCommand.speedY;
-            newSpeedZ = aircraftCommand.speedZ;
-            MsgReply(rcvid, EOK, nullptr, 0);
+		/**
+		 * Update Aircraft Speed (from OperatorConsole request)
+		 */
+		if (aircraftCommand.header.type == 0x02 && aircraftCommand.header.subtype == 0x00) {
+			newSpeedX = aircraftCommand.speedX;
+			newSpeedY = aircraftCommand.speedY;
+			newSpeedZ = aircraftCommand.speedZ;
+			MsgReply(rcvid, EOK, NULL, 0); // Acknowledge the request
 
-            Aircraft* aircraft = getAircraftByFlightId(aircraftCommand.flightId);
-            if (!aircraft) {
-                std::cout << "Error: Aircraft with flight ID " << aircraftCommand.flightId << " was not found." << std::endl;
-                continue;
-            }
+			// Retrieve the specified aircraft by flight ID
+			Aircraft* aircraft = getAircraftByFlightId(aircraftCommand.flightId);
+			if (aircraft == nullptr) {
+				cout << "Error: Aircraft with flight ID " << aircraftCommand.flightId << " was not FOUND." << endl;
+				continue;
+			}
 
-            CommunicationSystem communicationSystem;
-            communicationSystem.relayNewSpeed(*aircraft, newSpeedX, newSpeedY, newSpeedZ);
-            alarm();
-            continue;
+			// Start listener thread and update speed via CommunicationSystem
+			string attachPoint = string(ATTACH_POINT) + "_" + to_string(aircraftCommand.flightId);
+			pthread_t thread;
+			AircraftListenArgs* args = new AircraftListenArgs{aircraft, attachPoint};
+			pthread_create(&thread, NULL, &Aircraft::aircraftListenHelper, args);
 
-        } else if (aircraftCommand.header.type == 0x02 && aircraftCommand.header.subtype == 0x01) {
-            MsgReply(rcvid, EOK, nullptr, 0);
+			CommunicationSystem communicationSystem;
+			communicationSystem.relayNewSpeed(*aircraft, newSpeedX, newSpeedY, newSpeedZ);
+			alarm();
+			continue;
 
-            Aircraft* aircraft = getAircraftByFlightId(aircraftCommand.flightId);
-            if (!aircraft) {
-                std::cout << "Error: Aircraft with flight ID " << aircraftCommand.flightId << " was not found." << std::endl;
-                continue;
-            }
+		/**
+		 * Retrieve Aircraft Information (from OperatorConsole request)
+		 */
+		} else if (aircraftCommand.header.type == 0x02 && aircraftCommand.header.subtype == 0x01) {
+			MsgReply(rcvid, EOK, NULL, 0); // Acknowledge the request
 
-            // Create the attach point for radar
-            std::string radarAttachPoint = std::string(ATTACH_POINT) + "_RADAR";
+			// Retrieve specified aircraft
+			Aircraft* aircraft = getAircraftByFlightId(aircraftCommand.flightId);
+			if (aircraft == nullptr) {
+				cout << "Error: Aircraft with flight ID " << aircraftCommand.flightId << " was not found." << endl;
+				continue;
+			}
 
-            int radarCOID;
-            if ((radarCOID = name_open(radarAttachPoint.c_str(), 0)) == -1) {
-                perror("Computer System (computerSystemOperations): Error occurred while attaching the channel for Radar Request");
-                return;
-            }
+			// Start listener thread for aircraft
+			string attachPointRAD = string(ATTACH_POINT) + "_" + to_string(aircraftCommand.flightId);
+			pthread_t thread;
+			AircraftListenArgs* args = new AircraftListenArgs{aircraft, attachPointRAD};
+			pthread_create(&thread, NULL, &Aircraft::aircraftListenHelper, args);
 
-            aircraftCommand.header.type = 0x08;
-            aircraftCommand.header.subtype = 0x08;
+			// Set up connection with Radar
+			string radarAttachPoint  = string(ATTACH_POINT) + "_RADAR";
+			int radarCOID;
+			if ((radarCOID = name_open(radarAttachPoint.c_str(), 0)) == -1) {
+				perror("Computer System (computerSystemOperations): Error occurred while attaching the channel for Radar Request");
+				return;
+			}
 
-            // Send data to Radar expecting response with Aircraft Information
-            if (MsgSend(radarCOID, &aircraftCommand, sizeof(aircraftCommand), &aircraftCommand, sizeof(aircraftCommand)) == -1) {
-                std::cout << "Error while sending the message for aircraft: " << strerror(errno) << std::endl;
-                name_close(radarCOID);
-            }
+			// Prepare Radar request and expect response with aircraft info
+			aircraftCommand.header.type = 0x08;
+			aircraftCommand.header.subtype = 0x08;
 
-            // Send the received data to DataDisplay
-            std::string attachPointDATADISPLAY = std::string(ATTACH_POINT) + "_datadisplay_";
+			if (MsgSend(radarCOID, &aircraftCommand, sizeof(aircraftCommand), &aircraftCommand, sizeof(aircraftCommand)) == -1) {
+				cout << "Error while sending the message for aircraft: " << strerror(errno) << endl;
+				name_close(radarCOID);
+			}
 
-            int coid;
-            if ((coid = name_open(attachPointDATADISPLAY.c_str(), 0)) == -1) {
-                perror("Error occurred while attaching the channel IN COMPSYS FOR DATADISPLAY");
-                return;
-            }
+			// Send the received data to DataDisplay
+			string attachPointDATADISPLAY = string(ATTACH_POINT) + "_datadisplay_";
+			int coid;
+			if ((coid = name_open(attachPointDATADISPLAY.c_str(), 0)) == -1) {
+				perror("Error occurred while attaching the channel IN COMPSYS FOR DATADISPLAY");
+				return;
+			}
 
-            aircraftCommand.header.type = 0x05;
-            aircraftCommand.header.subtype = 0x01;
+			// Send data to DataDisplay with the received info
+			aircraftCommand.header.type = 0x05;
+			aircraftCommand.header.subtype = 0x01;
 
-            // Send data to DataDisplay expecting no response
-            if (MsgSend(coid, &aircraftCommand, sizeof(aircraftCommand), nullptr, 0) == -1) {
-                std::cout << "Error while sending the message for aircraft: " << strerror(errno) << std::endl;
-                name_close(coid);
-                return;
-            }
-        }
-    }
-    name_detach(attach, 0);
+			if (MsgSend(coid, &aircraftCommand, sizeof(aircraftCommand), NULL, 0) == -1) {
+				cout << "Error while sending the message for aircraft: " << strerror(errno) << endl;
+				name_close(coid);
+				return;
+			}
+
+			continue;
+		}
+	}
+	name_detach(attach, 0); // Clean up the attach point
 }
 
 /**
- * Separation Check Function
+ * Continuously checks the separation distance between aircraft and ensures safety limits.
  */
 void ComputerSystem::separationCheck() {
-    name_attach_t *attach;
+	name_attach_t *attach;
+	string attachPoint = string(ATTACH_POINT) + "_separation";
 
-    std::string attachPoint = std::string(ATTACH_POINT) + "_separation";
+	if ((attach = name_attach(NULL, attachPoint.c_str(), 0)) == NULL) {
+		perror("Error occurred while creating the attach point separation");
+	}
 
-    if ((attach = name_attach(NULL, attachPoint.c_str(), 0)) == NULL) {
-        perror("Error occurred while creating the attach point separation");
-    }
-    int n = 180;
-    int p = 5;
-    SeparationData separationCommand;
+	int n = 180; // Number of seconds to predict into the future
+	int p = 5; // Interval for checking separation
+	SeparationData separationCommand;
+	cTimer timer(p, 0);
 
-    cTimer timer(p, 0);
-    while (true) {
-        alarm();
-        int rcvid;
-        for (int i = 0; i < 2; i++) {
-            if ((rcvid = MsgReceive(attach->chid, &separationCommand, sizeof(separationCommand), NULL)) != -1) {
-                n = separationCommand.n_seconds;
-                timer.setTimerSpec(separationCommand.p_interval, 0);
-                std::cout << "Message Received N: " << n << " P:" << separationCommand.p_interval << std::endl;
-                MsgReply(rcvid, EOK, NULL, 0);
-                i = 200;
-            }
-        }
+	while (true) {
+		alarm();
+		int rcvid;
+		for (int i = 0; i < 2; i++) { // Attempt to receive a message up to 2 times
+			if ((rcvid = MsgReceive(attach->chid, &separationCommand, sizeof(separationCommand), NULL)) != -1) {
+				n = separationCommand.n_seconds;
+				timer.setTimerSpec(separationCommand.p_interval, 0);
+				cout << "Message Received N: " << n << " P:" << separationCommand.p_interval << endl;
+				MsgReply(rcvid, EOK, NULL, 0);
+				i = 200; // Exit loop after receiving a message
+			}
+		}
 
-        std::string output = "";
-        int width = 3000;
-        int height = 1000;
+		// Define separation constraint dimensions
+		string output = "";
+		int width = 3000;
+		int height = 1000;
 
-        for (Aircraft* a : aircrafts) {
-            int x = a->getPositionX() + n * a->getSpeedX();
-            int y = a->getPositionY() + n * a->getSpeedY();
-            int z = a->getPositionZ() + n * a->getSpeedZ();
+		for (Aircraft* a : aircrafts) {
+			int x = a->getPositionX() + n * a->getSpeedX();
+			int y = a->getPositionY() + n * a->getSpeedY();
+			int z = a->getPositionZ() + n * a->getSpeedZ();
 
-            for (Aircraft* b : aircrafts) {
-                if (a != b) {
-                    int bx = b->getPositionX() + n * b->getSpeedX();
-                    int by = b->getPositionY() + n * b->getSpeedY();
-                    int bz = b->getPositionZ() + n * b->getSpeedZ();
+			for (Aircraft* b : aircrafts) {
+				if (a != b) {
+					int bx = b->getPositionX() + n * b->getSpeedX();
+					int by = b->getPositionY() + n * b->getSpeedY();
+					int bz = b->getPositionZ() + n * b->getSpeedZ();
 
-                    if (bx > x + width || bx < x - width || by > y + width || by < y - width || bz > z + height || bz < z - height) {
-                        continue;
-                    }
+					// Check separation constraints
+					if (bx > x + width || bx < x - width || by > y + width || by < y - width || bz > z + height || bz < z - height) {
+						continue;
+					}
 
-                    output.append("" + std::to_string(a->getFlightId()) + " close to " + std::to_string(b->getFlightId()) + "\n");
-                }
-            }
-        }
-        if (output != "") {
-            std::cout << "SEPARATION CONSTRAINT VIOLATION AT CURRENT TIME + " << n << " seconds " << std::endl;
-            std::cout << output;
-        }
+					// Append message if separation constraint violation is detected
+					output.append("" + std::to_string(a->getFlightId()) + " close to " + std::to_string(b->getFlightId()) + "\n");
+				}
+			}
+		}
 
-        sleep(p);
-    }
-    name_detach(attach, 0);
+		if (output != "") {
+			cout << "SEPARATION CONSTRAINT VIOLATION AT CURRENT TIME + " << n << " seconds " << endl;
+			cout << output;
+		}
+
+		sleep(p);
+	}
+	name_detach(attach, 0); // Clean up attach point
 }
 
 /**
- * Alarm Function
+ * Alarm function to monitor and trigger alerts based on future safety checks.
  */
 void ComputerSystem::alarm() {
-    int m = 180;
+	int m = 180; // Duration to check into the future in seconds
 
-    std::string output = "";
-    int width = 3000;
-    int height = 1000;
+	string output = "";
+	int width = 3000;
+	int height = 1000;
 
-    for (int n = 0; n < m; n++) {
-        for (Aircraft* a : aircrafts) {
-            int x = a->getPositionX() + n * a->getSpeedX();
-            int y = a->getPositionY() + n * a->getSpeedY();
-            int z = a->getPositionZ() + n * a->getSpeedZ();
+	for (int n = 0; n < m; n++) { // Iterate every second up to 180 seconds
+		for (Aircraft* a : aircrafts) {
+			int x = a->getPositionX() + n * a->getSpeedX();
+			int y = a->getPositionY() + n * a->getSpeedY();
+			int z = a->getPositionZ() + n * a->getSpeedZ();
 
-            for (Aircraft* b : aircrafts) {
-                if (a != b) {
-                    int bx = b->getPositionX() + n * b->getSpeedX();
-                    int by = b->getPositionY() + n * b->getSpeedY();
-                    int bz = b->getPositionZ() + n * b->getSpeedZ();
+			for (Aircraft* b : aircrafts) {
+				if (a != b) {
+					int bx = b->getPositionX() + n * b->getSpeedX();
+					int by = b->getPositionY() + n * b->getSpeedY();
+					int bz = b->getPositionZ() + n * b->getSpeedZ();
 
-                    if (bx > x + width || bx < x - width || by > y + width || by < y - width || bz > z + height || bz < z - height) {
-                        continue;
-                    }
+					// Check if separation is violated
+					if (bx > x + width || bx < x - width || by > y + width || by < y - width || bz > z + height || bz < z - height) {
+						continue;
+					}
 
-                    output.append("" + std::to_string(a->getFlightId()) + " close to " + std::to_string(b->getFlightId()) + "\n");
-                    n = m;
-                }
-            }
-        }
-        if (output != "") {
-            std::cout << "Alarm: safety violation will happen within 3 minutes" << std::endl;
-            std::cout << output;
-        }
-    }
+					output.append("" + std::to_string(a->getFlightId()) + " close to " + std::to_string(b->getFlightId()) + "\n");
+					n = m; // End loop after finding a violation
+				}
+			}
+		}
+
+		if (output != "") {
+			cout << "Alarm: safety violation will happen within 3 minutes" << endl;
+			cout << output;
+		}
+	}
 }
 
-ComputerSystem::~ComputerSystem() {}
+// Destructor for ComputerSystem to clean up resources if necessary
+ComputerSystem::~ComputerSystem() {
+}

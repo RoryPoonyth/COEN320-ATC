@@ -1,29 +1,48 @@
-#pragma once
+#ifndef SRC_DATADISPLAY_H_
+#define SRC_DATADISPLAY_H_
 
-#define ROWS 25
-#define COLUMNS 25
+#define rows 25
+#define columns 25
 
 #include "Aircraft.h"
 #include <string>
 #include <vector>
+#include <mutex>
 
 using namespace std;
 
+// DataDisplay class: Manages the display and tracking of aircraft positions on a map
 class DataDisplay {
 public:
-    DataDisplay();
+	DataDisplay(); // Constructor to initialize the DataDisplay object
+	int code; // Code used for logging or status purposes
 
-    int code;
+	// Static initializer function for creating a thread to display the aircraft map
+	static void* MapInitializer(void* args);
 
-    static void* MapInitializer(void* args);
-    static void* dataDisplayInitializer(void* args);
+	// Static initializer function for creating a thread to listen to aircraft data display requests
+	static void* dataDisplayInitializer(void* args);
 
-    void* listenForAircraftMap();
-    void* listen();
-    void initMap(string (&airspace)[ROWS][COLUMNS]);
-    void clearPrevious(string (&airspace)[ROWS][COLUMNS], int indexI, int indexJ, const string& flightId);
-    string updateMap(vector<Aircraft*>& planes, string (&airspace)[ROWS][COLUMNS]);
-    void writeMap(const string& mapAsString);
+	// Listens for incoming aircraft map data and displays it on the map
+	void* listenForAircraftMap();
 
-    virtual ~DataDisplay();
+	// Listens for specific aircraft information requests from the operator console
+	void* listen();
+
+	// Initializes the airspace map by setting all cells to empty
+	void initMap(string (&airspace)[rows][columns]);
+
+	// Clears the previous position of a specified aircraft on the map
+	void clearPrevious(string (&airspace)[rows][columns], int indexI, int indexJ, string flightId);
+
+	// Updates the map with the current positions of all aircraft and returns the map as a string
+	string updateMap(vector<Aircraft*>& planes, string (&airspace)[rows][columns]);
+
+	// Writes the map state to a log file for record-keeping or debugging purposes
+	void writeMap(string mapAsString);
+
+	virtual ~DataDisplay(); // Destructor to clean up resources used by DataDisplay
+
 };
+
+#endif /* SRC_DATADISPLAY_H_ */

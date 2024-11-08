@@ -1,34 +1,58 @@
-#pragma once
+#ifndef SRC_COMPUTERSYSTEM_H_
+#define SRC_COMPUTERSYSTEM_H_
 
 #include "Aircraft.h"
 #include <vector>
 
-// Data structure to hold separation constraint details
+using namespace std;
+
+// Structure to store data for separation checks
 typedef struct {
-    int n_seconds;    // Number of seconds for separation check
-    int p_interval;   // Interval for checking separation
+	int n_seconds; // Number of seconds to check ahead for separation
+	int p_interval; // Interval period for checking separation
 } SeparationData;
 
+// The ComputerSystem class manages aircraft operations, communication, and monitoring
 class ComputerSystem {
 public:
-    ComputerSystem();
+	// Constructor to initialize the ComputerSystem object
+	ComputerSystem();
 
-    // Static thread functions
-    static void* MapDisplayThread(void* args);
-    static void* dataDisplayThread(void* args);
-    static void* computerSystemThread(void* args);
-    static void* separationCheckThread(void* args);
+	// Static wrapper functions to start threads for different system components
+	static void* MapDisplayThread(void* args);
+	static void* dataDisplayThread(void* args);
+	static void* computerSystemThread(void* args);
+	static void* separationCheckThread(void* args);
 
-    // Member functions for Computer System operations
-    void* MapDisplay();                          // Displays the map of aircrafts
-    void setAircrafts(const std::vector<Aircraft*>& aircrafts);  // Set the list of aircraft pointers
-    Aircraft* getAircraftByFlightId(int flightId); // Get an aircraft by its flight ID
-    void computerSystemOperations();             // Perform operations related to the computer system
-    void separationCheck();                      // Check separation between aircrafts
-    void alarm();                                // Trigger an alarm if a safety condition is violated
+	// Displays the 2D map of aircraft positions
+	void* MapDisplay();
 
-    virtual ~ComputerSystem();
+	// Sets the list of aircrafts managed by the system
+	void setAircrafts(vector<Aircraft*> aircrafts);
+
+	// Retrieves an Aircraft object based on its flight ID
+	Aircraft* getAircraftByFlightId(int flightId);
+
+	// Sends a new speed command to an aircraft via the communication system
+	void sendNewAircraftSpeedToCommunicationSystem();
+
+	// Requests specific aircraft data as per operator request
+	void operatorRequestAircraftData();
+
+	// Handles operations based on requests from the Operator Console
+	void computerSystemOperations();
+
+	// Checks aircraft separation to ensure safe distances
+	void separationCheck();
+
+	// Issues an alarm if any safety violations are detected
+	void alarm();
+
+	// Destructor to clean up resources used by the ComputerSystem object
+	virtual ~ComputerSystem();
 
 private:
-    std::vector<Aircraft*> aircrafts;            // Vector of aircraft pointers managed by the computer system
+	vector<Aircraft*> aircrafts; // Vector to hold pointers to managed Aircraft objects
 };
+
+#endif /* SRC_COMPUTERSYSTEM_H_ */

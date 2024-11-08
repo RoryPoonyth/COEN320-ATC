@@ -32,7 +32,7 @@ The Air Traffic Monitoring and Control System is designed to monitor and control
 ## Build Instructions
 1. Clone the repository to your local machine:
    ```bash
-   git clone <https://github.com/RoryPoonyth/COEN320_PROJECT>
+   git clone https://github.com/RoryPoonyth/COEN320_PROJECT
    ```
 2. Open the project in **Momentics IDE**.
 3. Build the project:

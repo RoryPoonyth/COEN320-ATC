@@ -12,22 +12,22 @@ constexpr char ATTACH_POINT[] = "default";
 
 Radar::Radar() {}
 
-Radar::Radar(const std::vector<Aircraft>& aircrafts) : aircrafts(aircrafts) {}
+Radar::Radar(const std::vector<Aircraft*>& aircrafts) : aircrafts(aircrafts) {}
 
-Radar::Radar(const Aircraft& aircraft) : aircraft(aircraft) {}
+Radar::Radar(Aircraft* aircraft) : aircraft(aircraft) {}
 
 void* Radar::radarInitializer(void* args) {
     auto* radar = static_cast<Radar*>(args);
-    radar->pingAircraft();
+    radar->pingAircraft(); // Call the actual member function
     return nullptr;
 }
 
-void* Radar::pingAircraft() {
+void Radar::pingAircraft() {
     std::string attachPoint = std::string(ATTACH_POINT) + "_RADAR";
     name_attach_t* attach = name_attach(nullptr, attachPoint.c_str(), 0);
     if (!attach) {
         std::cerr << "Radar (pingAircraft): Error occurred while creating the attach point: " << strerror(errno) << std::endl;
-        return (void*)EXIT_FAILURE;
+        return;
     }
 
     AircraftData aircraftCommand;
@@ -60,7 +60,6 @@ void* Radar::pingAircraft() {
     }
 
     name_detach(attach, 0);
-    return EXIT_SUCCESS;
 }
 
 void Radar::handlePulse(const AircraftData& aircraftCommand) const {
@@ -95,7 +94,7 @@ void Radar::handleAircraftRequest(int rcvid, AircraftData& aircraftCommand) cons
     name_close(server_coid);
 }
 
-AircraftData Radar::operatorRequestPingAircraft(int flightId) const {
+AircraftData Radar::requestPingForAircraft(int flightId) const {
     std::string attachPoint = std::string(ATTACH_POINT) + "_" + std::to_string(flightId);
     int server_coid = name_open(attachPoint.c_str(), 0);
     if (server_coid == -1) {

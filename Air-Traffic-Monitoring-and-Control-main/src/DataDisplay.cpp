@@ -7,9 +7,12 @@
 #include <sys/dispatch.h>
 #include <iomanip>
 #include <sstream>
-#include <fcntl.h> // For file operations
-#include <unistd.h> // For close()
-#include <stdlib.h> // For EXIT_SUCCESS
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <chrono>
+#include <thread>
+
 
 using namespace std;
 
@@ -222,20 +225,31 @@ void DataDisplay::clearPrevious(string (&airspace)[rows][columns], int flightId)
  * Write the current map state to a log file.
  */
 void DataDisplay::writeMap(string mapAsString) {
-    code = creat("/data/home/qnxuser/MapLog.txt", S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-    if(code == -1) {
-        cout << "Map could not be logged, error" << endl;
+    int code = open("/data/home/qnxuser/MapLog.txt", O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+    if (code == -1) {
+        std::cerr << "Map could not be logged, error" << std::endl;
     } else {
-        // Buffer the map data to write to the log file
-        char *blockBuffer = new char[mapAsString.length() + 1];
-        sprintf(blockBuffer, "%s", mapAsString.c_str());
-        write(code, blockBuffer, mapAsString.length() + 1);
-        write(code, "====", 4);
-        write(code, "\n", 1);
-        delete[] blockBuffer;
-        close(code);
+        // Write map data to the log file
+        ssize_t bytes_written = write(code, mapAsString.c_str(), mapAsString.size());
+        if (bytes_written == -1) {
+            std::cerr << "Error writing map data to log file" << std::endl;
+        }
+
+        // Write separator and newline
+        bytes_written = write(code, "====", 4);
+        if (bytes_written == -1) {
+            std::cerr << "Error writing separator to log file" << std::endl;
+        }
+
+        bytes_written = write(code, "\n", 1);
+        if (bytes_written == -1) {
+            std::cerr << "Error writing newline to log file" << std::endl;
+        }
+
+        close(code); // Close the file after writing
     }
 }
+
 
 /**
  * Format the cell content to have consistent width.
@@ -284,12 +298,14 @@ void DataDisplay::printMapWithTimestamp(string (&airspace)[rows][columns]) {
  * Update the map based on current aircraft positions.
  */
 string DataDisplay::updateMap(vector<Aircraft*>& planes, string (&airspace)[rows][columns]) {
-    // Each cell represents a 1000 ft area
+    static int iterationCounter = 0;  // Counter for iterations
+    // Initialize lastWriteTime to a time in the past to ensure immediate logging on the first call
+    static auto lastWriteTime = std::chrono::steady_clock::now() - std::chrono::seconds(30);
 
     // Clear the previous positions of all aircraft
     initMap(airspace);
 
-    for(size_t k = 0; k < planes.size(); k++) {
+    for (size_t k = 0; k < planes.size(); k++) {
         int xCurrent = planes[k]->getPositionX();
         int yCurrent = planes[k]->getPositionY();
 
@@ -324,7 +340,18 @@ string DataDisplay::updateMap(vector<Aircraft*>& planes, string (&airspace)[rows
         mapAsStringStream << endl;
     }
     string mapAsString = mapAsStringStream.str();
-    writeMap(mapAsString);
+
+    // Determine if we should log the map based on time or iteration count
+    iterationCounter++;
+    auto currentTime = std::chrono::steady_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastWriteTime).count();
+
+    if (iterationCounter >= 6 || timeElapsed >= 30) {
+        writeMap(mapAsString);  // Log the map
+        iterationCounter = 0;   // Reset the iteration counter
+        lastWriteTime = currentTime;  // Update the last write time
+    }
+
     return mapAsString;
 }
 

@@ -5,7 +5,10 @@
 
 #include <sys/dispatch.h>
 #include <vector>
+#include <fcntl.h>
+#include <unistd.h>
 #include <string>
+#include <iostream>
 
 #define ATTACH_POINT "default" // Define the base attach point for communication
 
@@ -16,19 +19,25 @@ OperatorConsole::OperatorConsole() {
 }
 
 // Logs operator commands to a file
-void OperatorConsole::writeLog(string log_entry){
-	int code = creat("/data/home/qnxuser/OperatorLog.txt", S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-	if (code == -1) {
-		std::cout << "Operator commands could not be logged, error" << endl;
-	} else {
-		// Create a buffer to write to the file according to QNX requirements
-		char *blockBuffer = new char[log_entry.length() + 1];
-		sprintf(blockBuffer, "%s", log_entry.c_str());
-		write(code, blockBuffer, log_entry.length() + 1);
-		write(code, "\n", 1);
-		delete[] blockBuffer; // Free the buffer memory
-		close(code); // Close the file after writing
-	}
+void OperatorConsole::writeLog(string log_entry) {
+    int code = open("/data/home/qnxuser/OperatorLog.txt", O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+    if (code == -1) {
+        std::cerr << "Operator commands could not be logged, error" << std::endl;
+    } else {
+        // Write log entry and newline
+        ssize_t bytes_written = write(code, log_entry.c_str(), log_entry.size());
+        if (bytes_written == -1) {
+            std::cerr << "Error writing to log file" << std::endl;
+        }
+
+        // Write newline separately
+        bytes_written = write(code, "\n", 1);
+        if (bytes_written == -1) {
+            std::cerr << "Error writing newline to log file" << std::endl;
+        }
+
+        close(code); // Close the file after writing
+    }
 }
 
 // Initializes a thread to listen for operator input

@@ -9,8 +9,8 @@
 using namespace std;
 
 // Constants for map dimensions
-const int rows = 25;
-const int columns = 25;
+const int rows = 100;
+const int columns = 100;
 
 // DataDisplay class: Manages the display and tracking of aircraft positions on a map
 class DataDisplay {

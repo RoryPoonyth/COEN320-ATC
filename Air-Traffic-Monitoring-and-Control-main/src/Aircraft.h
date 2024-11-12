@@ -31,7 +31,7 @@ private:
     int speedX = 0;          // Speed along the X axis
     int speedY = 0;          // Speed along the Y axis
     int speedZ = 0;          // Speed along the Z axis
-    int time = 0;            // Timestamp or interval (type can be discussed further)
+    int time = 0;            // Release time
     int err_no = 0;          // Error number for thread operations
     pthread_attr_t attr;     // Thread attributes
     pthread_t thread;        // Thread handle
@@ -64,6 +64,10 @@ public:
     void setSpeedX(int speedX);
     void setSpeedY(int speedY);
     void setSpeedZ(int speedZ);
+
+    int getReleaseTime() const {
+            return time;
+        }
 
     // Methods to start and stop the aircraft operations thread
     void startThread();

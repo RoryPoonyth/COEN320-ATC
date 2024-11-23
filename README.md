@@ -1,4 +1,4 @@
-# COEN320_PROJECT
+# COEN320-ATC
 
 ## Introduction
 This project is part of the COEN 320 course titled **Introduction to Real-Time Systems** in the Department of Electrical and Computer Engineering, Fall 2024. The project aims to develop an Air Traffic Monitoring and Control System that simulates the management of multiple aircraft in real-time, incorporating key concepts of real-time systems, such as concurrency, inter-process communication, and safety-critical operations.
